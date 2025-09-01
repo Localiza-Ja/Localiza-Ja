@@ -34,14 +34,20 @@ Para executar a API localmente, siga os passos abaixo:
    venv\Scripts\activate  # No Linux ou MacOS: source venv/bin/activate
    ```
 
-3. **Instalar Dependências**:
+3. **Desativar um Ambiente Virtual**:
+
+   ```bash
+   deactivate
+   ```
+
+4. **Instalar Dependências**:
    Instale os pacotes listados no arquivo `requirements.txt`:
 
    ```bash
    pip install -r requirements.txt
    ```
 
-4. **Configurar Variáveis de Ambiente**:
+5. **Configurar Variáveis de Ambiente**:
    Crie um arquivo `.env` na raiz do projeto com as seguintes variáveis (Há um copia `copia.env`):
 
    ```bash
@@ -50,7 +56,7 @@ Para executar a API localmente, siga os passos abaixo:
    JWT_SECRET_KEY=<sua-chave-jwt>
    ```
 
-5. **Executar a Aplicação**:
+6. **Executar a Aplicação**:
    Inicie o servidor de desenvolvimento do Flask:
 
    ```bash
@@ -59,7 +65,7 @@ Para executar a API localmente, siga os passos abaixo:
 
    A API estará disponível em `http://0.0.0.0:5000` por padrão.
 
-6. **Configurar o Banco de Dados**:
+7. **Configurar o Banco de Dados**:
    Certifique-se de que um banco de dados PostgreSQL está em execução e acessível. A API usa o SQLAlchemy para criar automaticamente a tabela `sensor` ao iniciar, desde que o `DATABASE_URL` esteja corretamente configurado.
 
 ## Status Codes
