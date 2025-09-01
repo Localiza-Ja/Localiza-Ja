@@ -1,0 +1,18 @@
+# Ignorar arquivo de variáveis de ambiente
+.env
+
+# Ignorar diretório do ambiente virtual
+localiza_ja/
+
+# Ignorar arquivos gerados pelo Python
+*.pyc
+__pycache__/
+*.pyo
+*.pyd
+
+# Ignorar arquivos de IDEs (exemplo para VSCode)
+.vscode/
+
+# Ignorar logs e arquivos temporários
+*.log
+*.tmp
