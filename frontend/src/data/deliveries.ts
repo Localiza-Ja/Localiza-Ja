@@ -1,22 +1,40 @@
-export const deliveries = [
+import { Delivery } from '../types';
+
+export const deliveries: Delivery[] = [
   {
     id: 1,
-    address: "Rua Alvare Padilha, 257 Jardim Primavera, Campinas/SP",
-    client: "Hortifuti S.A.",
-    phone: "(19)98145-7485",
-    obs: "Ao lado do Campo de Futebol",
-    orderNumber: "49547-2",
-    status: "Em andamento",
-  },
-  // Adicione mais itens como no Figma
-  {
-    id: 2,
-    address: "Metallurgica Forte Mais Campinas/SP",
-    client: "Afons Padilha",
-    phone: "(19)98145-7485",
+    client: "Hortifruti S.A.",
+    addressStreet: "Rua Alvare Padilha, 257", 
+    addressCity: "Jardim Primavera, Campinas/SP", 
+    phone: "(19) 91234-5678",
     obs: "Ao lado do Campo de Futebol",
     orderNumber: "49547-2",
     status: "Pendente",
+    latitude: -22.9056,
+    longitude: -47.0608,
   },
-  // ... mais 3 itens
+  {
+    id: 2,
+    client: "Metalúrgica Forte Mais",
+    addressStreet: "Avenida da Indústria, 1200", 
+    addressCity: "Distrito Industrial, Campinas/SP", 
+    phone: "(19) 98765-4321",
+    obs: "Portão azul",
+    orderNumber: "49548-1",
+    status: "Pendente",
+    latitude: -22.8856,
+    longitude: -47.0508,
+  },
+  {
+    id: 3,
+    client: "Supermercado LeveMais",
+    addressStreet: "Rua Sete de Setembro, 500", 
+    addressCity: "Centro, Sumaré/SP", 
+    phone: "(19) 99999-8888",
+    obs: "Entregar no depósito dos fundos",
+    orderNumber: "49549-0",
+    status: "Pendente",
+    latitude: -22.8219,
+    longitude: -47.2667,
+  },
 ];
