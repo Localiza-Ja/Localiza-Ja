@@ -1,3 +1,10 @@
+"""
+Módulo: arduino.ino
+Descrição: Código referente ao ESP 32, suas conexões e funções com o rastreador.
+Autor: Gustavo Henrique dos Anjos
+Data: 13/09/2025
+"""
+
 #include <WiFi.h>
 #include <WebServer.h>
 #include <ArduinoJson.h>
