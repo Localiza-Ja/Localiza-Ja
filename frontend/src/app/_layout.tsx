@@ -1,6 +1,7 @@
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { Stack } from "expo-router";
 import "../styles/global.css";
+import "../styles/global.css";
 
 export default function RootLayout() {
   return (

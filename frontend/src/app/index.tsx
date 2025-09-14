@@ -1,101 +1,42 @@
 import {
   View,
-  Text,
   TextInput,
-  TextInputProps,
-  TouchableOpacity,
-  Image,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Keyboard,
 } from "react-native";
+import { useSharedValue, withTiming } from "react-native-reanimated";
 import { router } from "expo-router";
-import { useState, useRef, forwardRef } from "react";
-import { LinearGradient } from "expo-linear-gradient";
+import { useState, useRef, useEffect } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
-
-interface InputFieldProps extends TextInputProps {
-  label: string;
-  placeholder?: string;
-}
-const InputField = forwardRef<TextInput, InputFieldProps>((props, ref) => {
-  const { label, ...rest } = props;
-  return (
-    <View className="w-full mb-4">
-      <Text className="text-gray-500 font-semibold mb-2 ml-1">{label}</Text>
-      <TextInput
-        ref={ref}
-        className="w-full bg-[#F3F7FB] p-4 rounded-xl text-base text-[#22212E]"
-        placeholderTextColor="#ADB5BD"
-        {...rest}
-      />
-    </View>
-  );
-});
-InputField.displayName = "InputField";
-
-interface HeaderSectionProps {
-  name: string;
-  tips: string;
-}
-const HeaderSection = ({ name, tips }: HeaderSectionProps) => (
-  <LinearGradient
-    colors={["#FCA14E", "#FFE6CE"]}
-    style={{
-      width: "100%",
-      borderBottomLeftRadius: 40,
-      borderBottomRightRadius: 40,
-      paddingHorizontal: 24,
-      paddingVertical: 32,
-      flex: 11,
-      justifyContent: "center",
-    }}
-  >
-    <Image
-      source={require("../../assets/images/truck.png")}
-      style={{
-        position: "absolute",
-        right: "-20%",
-        top: "15%",
-        width: "70%",
-        height: 150,
-        resizeMode: "contain",
-      }}
-    />
-    <View style={{ marginBottom: 40 }}>
-      <Text className="text-2xl font-bold mb-1 text-[#22212E]">
-        Olá, {name}
-      </Text>
-      <Text className="text-4xl font-bold text-[#22212E]">Localiza Já</Text>
-    </View>
-    <View>
-      <Text className="text-base italic font-medium text-[#22212E]">
-        {tips}
-      </Text>
-    </View>
-  </LinearGradient>
-);
-
-interface ButtonProps {
-  title: string;
-  onPress: () => void;
-}
-const CustomButton = ({ title, onPress }: ButtonProps) => (
-  <TouchableOpacity
-    className="w-full bg-[#22212E] p-4 rounded-full shadow-md active:opacity-80"
-    onPress={onPress}
-  >
-    <Text className="text-white text-center text-lg font-bold">{title}</Text>
-  </TouchableOpacity>
-);
+import InputField from "../components/InputField";
+import CustomButton from "../components/CustomButton";
+import HeaderSection from "../components/HeaderSection";
+import { SPACING } from "../styles/theme";
 
 export default function Login() {
+
   const [cnh, setCnh] = useState("");
   const [placa, setPlaca] = useState("");
   const [empresa, setEmpresa] = useState("");
-
   const placaInputRef = useRef<TextInput>(null);
   const empresaInputRef = useRef<TextInput>(null);
+
+  const keyboardAnimation = useSharedValue(0);
+
+  useEffect(() => {
+    const show = Keyboard.addListener("keyboardDidShow", () => {
+      keyboardAnimation.value = withTiming(1, { duration: 300 });
+    });
+    const hide = Keyboard.addListener("keyboardDidHide", () => {
+      keyboardAnimation.value = withTiming(0, { duration: 300 });
+    });
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, [keyboardAnimation]);
 
   const handleLogin = () => {
     router.push("/map");
@@ -106,31 +47,27 @@ export default function Login() {
 
   return (
     <SafeAreaView
-      style={{ flex: 1, backgroundColor: "#FFF" }}
+      className="flex-1 bg-background"
       edges={["right", "left", "bottom"]}
     >
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={{ flex: 1 }}
-      >
-        <View style={{ flex: 1 }}>
-          <View style={{ flex: 11 }}>
-            <HeaderSection name="Richard" tips={tips} />
-          </View>
+      <View className="flex-1">
+        <HeaderSection
+          name="Motorista"
+          tips={tips}
+          keyboardAnimation={keyboardAnimation}
+        />
 
-          <View
-            style={{
-              flex: 9,
-              padding: 24,
-              justifyContent: "space-between",
-              backgroundColor: "#FFF",
-            }}
+        <View className="flex-1">
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            className="flex-1"
           >
             <ScrollView
-              style={{ marginBottom: 20 }}
+              className="flex-1"
               contentContainerStyle={{
                 flexGrow: 1,
-                justifyContent: "flex-end",
+                justifyContent: "space-between",
+                padding: SPACING[6],
               }}
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
@@ -165,11 +102,11 @@ export default function Login() {
                   onSubmitEditing={handleLogin}
                 />
               </View>
+              <CustomButton title="Acessar" onPress={handleLogin} />
             </ScrollView>
-            <CustomButton title="Acessar" onPress={handleLogin} />
-          </View>
+          </KeyboardAvoidingView>
         </View>
-      </KeyboardAvoidingView>
+      </View>
     </SafeAreaView>
   );
 }
