@@ -1,3 +1,5 @@
+// ARQUIVO: frontend/src/components/HeaderSection.tsx (Versão Final Ajustada)
+
 import React from "react";
 import { View, Text, Image, useWindowDimensions } from "react-native";
 import Animated, {
@@ -9,67 +11,60 @@ import { LinearGradient } from "expo-linear-gradient";
 import { COLORS } from "../styles/theme";
 import { scale, verticalScale } from "react-native-size-matters";
 
-// --- CORREÇÃO 2: Chame 'createAnimatedComponent' como um método de 'Animated' ---
+// Criamos uma versão animável do LinearGradient
 const AnimatedLinearGradient = Animated.createAnimatedComponent(LinearGradient);
 
 interface HeaderSectionProps {
-  name: string;
-  tips: string;
+  name: string; // Será o título principal (ex: "Localiza Já" ou "Seja bem vindo(a)!")
+  tips: string; // Será o subtítulo
   keyboardAnimation: SharedValue<number>;
 }
 
-// O resto do arquivo permanece exatamente o mesmo
 const HeaderSection = ({
   name,
   tips,
   keyboardAnimation,
 }: HeaderSectionProps) => {
-  // ... (toda a lógica interna permanece a mesma) ...
   const { height: screenHeight } = useWindowDimensions();
-  const imageMarginBottom = screenHeight * 0.05;
-  const imageHeight = screenHeight * 0.12;
 
+  // --- ANIMAÇÃO DA ALTURA DO CONTAINER ---
   const animatedContainerStyle = useAnimatedStyle(() => {
-    const height =
-      (1 - keyboardAnimation.value) *
-        (screenHeight * 0.45 - screenHeight * 0.12) +
-      screenHeight * 0.12;
-    return {
-      height: height,
-    };
-  });
-
-  const mainContentStyle = useAnimatedStyle(() => {
-    const opacity = interpolate(
+    // A altura do header varia entre 40% e 12% da tela
+    const height = interpolate(
       keyboardAnimation.value,
-      [0, 0.5],
-      [1, 0]
+      [0, 1], // De teclado escondido (0) para visível (1)
+      [screenHeight * 0.4, screenHeight * 0.12] // Altura vai de 40% para 12%
     );
+    return { height };
+  });
+
+  // --- ANIMAÇÃO DO CONTEÚDO PRINCIPAL (TUDO EXCETO O LOGO PEQUENO) ---
+  const mainContentStyle = useAnimatedStyle(() => {
+    // A opacidade desaparece na primeira metade da animação do teclado
+    const opacity = interpolate(keyboardAnimation.value, [0, 0.5], [1, 0]);
     return { opacity };
   });
 
+  // --- ANIMAÇÃO DO LOGO PEQUENO (QUANDO O TECLADO ESTÁ ABERTO) ---
   const smallLogoStyle = useAnimatedStyle(() => {
-    const opacity = (keyboardAnimation.value - 0.5) / 0.5;
+    // A opacidade aparece na segunda metade da animação
+    const opacity = interpolate(keyboardAnimation.value, [0.5, 1], [0, 1]);
     return { opacity };
-  });
-
-  const titleStyle = useAnimatedStyle(() => {
-    const translateY = keyboardAnimation.value * -20;
-    return { transform: [{ translateY }] };
   });
 
   return (
     <AnimatedLinearGradient
-      colors={[COLORS.primary, COLORS["gradient-end"]]}
-      className="w-full rounded-b-4xl"
-      style={animatedContainerStyle}
+      colors={[COLORS.primary, COLORS["gradient-end"]]} // Suas cores do tema
+      className="w-full rounded-b-4xl justify-center items-center p-6"
+      style={animatedContainerStyle} // Aplica a altura animada
     >
+      {/* Conteúdo que só aparece quando o teclado está ABERTO */}
       <Animated.View
         className="absolute top-0 left-0 w-full h-full justify-center items-center"
         style={smallLogoStyle}
       >
         <Animated.Image
-          source={require("../../assets/images/logo001.png")}
+          source={require("../../assets/images/logo001.png")} // Logo principal
           style={{
             width: scale(200),
             height: verticalScale(60),
@@ -77,34 +72,23 @@ const HeaderSection = ({
           }}
         />
       </Animated.View>
+
+      {/* Conteúdo que só aparece quando o teclado está FECHADO */}
       <Animated.View
-        className="absolute top-0 left-0 w-full h-full justify-center items-center px-6"
+        className="w-full h-full items-center"
         style={mainContentStyle}
       >
+        <Text className="text-5xl font-bold text-text-primary mt-12">
+          {name}
+        </Text>
+        <Text className="text-base text-text-primary text-center mt-2">
+          {tips}
+        </Text>
         <Image
-          source={require("../../assets/images/login003.png")}
-          accessible={true}
-          accessibilityLabel="Ilustração de um caminhão de entregas"
-          style={{
-            width: "70%",
-            height: imageHeight,
-            resizeMode: "contain",
-            marginBottom: imageMarginBottom,
-          }}
+          source={require("../../assets/images/truck001.png")} // Caminhão isométrico
+          className="w-40 h-20 mt-4"
+          resizeMode="contain"
         />
-        <View className="items-start w-full">
-          <Animated.View style={titleStyle}>
-            <Text className="text-2xl font-bold mb-1 text-text-primary">
-              Olá, {name}
-            </Text>
-            <Text className="text-4xl font-bold text-text-primary">
-              Localiza Já
-            </Text>
-          </Animated.View>
-          <Animated.View className="mt-2.5">
-            <Text className="text-sm text-text-primary">{tips}</Text>
-          </Animated.View>
-        </View>
       </Animated.View>
     </AnimatedLinearGradient>
   );

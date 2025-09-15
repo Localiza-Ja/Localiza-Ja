@@ -1,4 +1,4 @@
-// ARQUIVO: frontend/src/components/InputField.tsx
+// frontend/src/components/InputField.tsx
 
 import React, { forwardRef } from "react";
 import { View, Text, TextInput, TextInputProps } from "react-native";

@@ -2,7 +2,9 @@
   "name": "localizaja",
   "main": "expo-router/entry",
   "version": "1.0.0",
+  "packageManager": "yarn@1.22.22",
   "scripts": {
+    "preinstall": "node -e \"if(process.env.npm_execpath.indexOf('yarn') === -1) { console.error('\\u001b[31mVocê deve usar o Yarn para instalar as dependências. Por favor, rode \\`yarn install\\`.\\u001b[39m'); process.exit(1); }\"",
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
@@ -37,6 +39,7 @@
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-native": "0.81.4",
+    "react-native-element-dropdown": "^2.12.4",
     "react-native-gesture-handler": "~2.28.0",
     "react-native-maps": "1.20.1",
     "react-native-modal": "^14.0.0-rc.1",
