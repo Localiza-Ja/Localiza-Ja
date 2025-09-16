@@ -9,7 +9,7 @@ from flask import Flask, jsonify
 from flask_restful import Api
 from app.db import create_app
 from flask_jwt_extended import JWTManager
-from app.routes import SensorList
+from app.routes import Sensor_rote
 from app.routes import Ping
 from dotenv import load_dotenv
 import os
@@ -20,7 +20,7 @@ api = Api(app)
 jwt = JWTManager(app)
 
 api.add_resource(Ping, '/ping')
-api.add_resource(SensorList, '/sensor_api')
+api.add_resource(Sensor_rote, '/sensor_api', '/sensor_api/<string:sensor_id>')
 
 if __name__ == "__main__":
     # TODO: Desativar modo de depuração (debug=False) em produção.

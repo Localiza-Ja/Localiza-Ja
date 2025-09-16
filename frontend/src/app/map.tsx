@@ -1,82 +1,127 @@
-import { View, Text, TouchableOpacity, Dimensions } from "react-native";
-import MapView, { Marker, Polyline } from "react-native-maps";
+
 import { router } from "expo-router";
+import { View, StyleSheet } from "react-native";
+import { StatusBar } from 'expo-status-bar';
+import MapView, { Marker } from "react-native-maps";
+import React, { useMemo, useRef, useState, useEffect } from "react";
+import BottomSheet from "@gorhom/bottom-sheet";
+import * as Location from 'expo-location';
+
 import { deliveries } from "../data/deliveries";
+import { Delivery } from "../types";
+import DeliveriesList from "../components/DeliveriesList";
+import AppHeader from "../components/AppHeader";
+
+const appLogo = require("../../assets/images/nt2-logo.png");
 
 export default function MapScreen() {
+  const mapRef = useRef<MapView>(null);
+  const [selectedDelivery, setSelectedDelivery] = useState<Delivery | null>(deliveries[0] || null);
+  const [deliveriesData, setDeliveriesData] = useState<Delivery[]>(deliveries);
+  const [driverLocation, setDriverLocation] = useState<Location.LocationObject | null>(null);
+  
+ 
+  const [activeSnapIndex, setActiveSnapIndex] = useState(1); 
+  useEffect(() => {
+    let subscription: Location.LocationSubscription | null = null;
+    const startWatching = async () => {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        console.error('Permissão de localização negada');
+        return;
+      }
+      subscription = await Location.watchPositionAsync({
+        accuracy: Location.Accuracy.BestForNavigation,
+        timeInterval: 5000,
+        distanceInterval: 10,
+      }, (location) => {
+        setDriverLocation(location);
+      });
+    };
+    startWatching();
+    return () => {
+      if (subscription) {
+        subscription.remove();
+      }
+    };
+  }, []);
+
   const initialRegion = {
-    latitude: -22.9056, // Campinas/SP
-    longitude: -47.0608,
-    latitudeDelta: 0.1, // Ajuste o zoom no mapa
+    latitude: deliveries[0]?.latitude || -22.9056,
+    longitude: deliveries[0]?.longitude || -47.0608,
+    latitudeDelta: 0.1,
     longitudeDelta: 0.1,
   };
+  
 
-  const points = [
-    { latitude: -22.9056, longitude: -47.0608, title: "01" },
-    { latitude: -22.8856, longitude: -47.0508, title: "02" },
-  ];
-
+  const snapPoints = useMemo(() => ["15%", "60%", "95%"], []);
+  
   const handleLogout = () => router.push("/");
-  const handleStartDelivery = () => alert("Entrega iniciada!");
-  const handleFinishDelivery = () => {
-    alert("Entrega finalizada!");
-    router.push("/deliveries");
-  };
+
+  function handleDeliveryPress(delivery: Delivery) {
+    setSelectedDelivery(delivery);
+    mapRef.current?.animateToRegion({
+      latitude: delivery.latitude,
+      longitude: delivery.longitude,
+      latitudeDelta: 0.01,
+      longitudeDelta: 0.01,
+    }, 1000);
+  }
+
+  function handleUpdateStatus(deliveryId: number, newStatus: string) {
+    const updatedDeliveries = deliveriesData.map((delivery) => {
+      if (delivery.id === deliveryId) {
+        return { ...delivery, status: newStatus };
+      }
+      return delivery;
+    });
+    setDeliveriesData(updatedDeliveries);
+  }
 
   return (
-    <View className="flex-1">
-      {/* Mapa com Apple Maps */}
-      <MapView
-        className="flex-1"
-        initialRegion={initialRegion}
-        style={{ width: Dimensions.get("window").width, height: "100%" }} // Força tamanho
-      >
-        {points.map((point, index) => (
-          <Marker key={index} coordinate={point} title={point.title} />
+    <View style={styles.container}>
+      <StatusBar style="light" backgroundColor="#21222D" />
+      <MapView ref={mapRef} style={styles.map} initialRegion={initialRegion}>
+        {deliveriesData.map((delivery) => (
+          <Marker
+            key={`delivery-${delivery.id}`}
+            coordinate={{ latitude: delivery.latitude, longitude: delivery.longitude }}
+            pinColor="red"
+          />
         ))}
-        <Polyline coordinates={points} strokeColor="#000" strokeWidth={2} />
+        {driverLocation && (
+          <Marker
+            key="driver"
+            coordinate={{
+              latitude: driverLocation.coords.latitude,
+              longitude: driverLocation.coords.longitude,
+            }}
+            title="Sua Posição"
+            pinColor="blue"
+          />
+        )}
       </MapView>
 
-      {/* Header */}
-      <View className="absolute top-10 left-5 right-5 flex-row justify-between">
-        <Text className="text-white font-bold text-xl">NACIONAL TELHA</Text>
-        <TouchableOpacity onPress={handleLogout}>
-          <Text className="text-white">Logout</Text>
-        </TouchableOpacity>
-      </View>
+      <AppHeader logoSource={appLogo} onLogout={handleLogout} />
 
-      {/* Card de detalhes */}
-      <View className="absolute bottom-20 left-5 right-5 bg-white p-4 rounded-md shadow-md">
-        <Text className="font-bold">Detalhes da Entrega</Text>
-        <Text>{deliveries[0].address}</Text>
-        <Text>Cliente: {deliveries[0].client}</Text>
-        <Text>Tel: {deliveries[0].phone}</Text>
-        <Text>Obs: {deliveries[0].obs}</Text>
-        <Text>Número do Pedido: {deliveries[0].orderNumber}</Text>
-        <Text>Status: {deliveries[0].status}</Text>
-        <View className="flex-row justify-between mt-4">
-          <TouchableOpacity
-            className="bg-blue-500 p-2 rounded"
-            onPress={handleStartDelivery}
-          >
-            <Text className="text-white">Iniciar entrega</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            className="bg-green-500 p-2 rounded"
-            onPress={handleFinishDelivery}
-          >
-            <Text className="text-white">Finalizar entrega</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* Botão para entregas */}
-      <TouchableOpacity
-        className="absolute bottom-5 right-5 bg-blue-900 p-3 rounded-full"
-        onPress={() => router.push("/deliveries")}
+      <BottomSheet 
+        index={1} 
+        snapPoints={snapPoints} 
+        onChange={(index) => setActiveSnapIndex(index)} 
+        handleIndicatorStyle={{ backgroundColor: '#010409ff', width: 50 }} 
+        backgroundStyle={{ backgroundColor: 'white' }}
       >
-        <Text className="text-white">Ver Entregas</Text>
-      </TouchableOpacity>
+        
+        <DeliveriesList
+          data={deliveriesData}
+          onDeliveryPress={handleDeliveryPress}
+          onUpdateStatus={handleUpdateStatus}
+          activeSnapIndex={activeSnapIndex}
+          selectedDelivery={selectedDelivery}
+        />
+      </BottomSheet>
     </View>
   );
 }
+
+const styles = StyleSheet.create({ container: { flex: 1 }, map: { ...StyleSheet.absoluteFillObject } });
