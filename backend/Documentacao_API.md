@@ -73,7 +73,53 @@ Para executar a API localmente, siga os passos abaixo:
    A API estará disponível em `http://0.0.0.0:5000` por padrão.
 
 7. **Configurar o Banco de Dados**:
-   Certifique-se de que um banco de dados PostgreSQL está em execução e acessível. A API usa o SQLAlchemy para criar automaticamente a tabela `sensor` ao iniciar, desde que o `DATABASE_URL` esteja corretamente configurado.
+   Certifique-se de que um banco de dados PostgreSQL está em execução e acessível. A API usa o SQLAlchemy para interações com o banco de dados. Para criar as tabelas necessárias (como a tabela `sensor`), você precisará configurar o ambiente e executar comandos via Flask shell. Siga os passos abaixo:
+
+   - **Instalar e Configurar o PostgreSQL** (se não estiver instalado):
+
+     - Baixe e instale o PostgreSQL a partir do site oficial (https://www.postgresql.org/download/).
+     - Crie um novo banco de dados usando o pgAdmin ou via linha de comando:
+       ```bash
+       psql -U <usuário> -h <host>  # Entre no psql
+       CREATE DATABASE <nome-do-banco>;  # Crie o banco de dados
+       ```
+     - Atualize a `DATABASE_URL` no arquivo `.env` com as credenciais corretas (ex: `postgresql://postgres:senha@localhost:5432/nome-do-banco`).
+
+   - **Criar as Tabelas no Banco de Dados**:
+     Ative o ambiente virtual (passo 2) e configure a variável de ambiente `FLASK_APP` para apontar para o arquivo principal da aplicação (`main.py`). Em seguida, inicie o Flask shell e execute o comando para criar as tabelas.
+
+     Para Windows:
+
+     ```bash
+     set FLASK_APP=main
+     ```
+
+     Para Linux/MacOS:
+
+     ```bash
+     export FLASK_APP=main
+     ```
+
+     Em seguida, inicie o shell:
+
+     ```bash
+     flask shell
+     ```
+
+     No shell do Flask, execute:
+
+     ```python
+     from app.models.sensor import db
+     db.create_all()
+     ```
+
+     Isso criará todas as tabelas definidas nos modelos (como a tabela `sensor`). Saia do shell com `exit()`.
+
+   - **Observações Importantes**:
+     - Certifique-se de que o PostgreSQL está rodando antes de executar esses comandos.
+     - Se o banco de dados já existir, `db.create_all()` não sobrescreverá tabelas existentes, mas criará apenas as que faltam.
+     - Em caso de erros (como conexão falha), verifique a `DATABASE_URL` no `.env` e as permissões no PostgreSQL.
+     - Para ambientes de produção, considere usar migrações com Flask-Migrate (não incluído por padrão; instale via `pip install flask-migrate` e configure).
 
 ## Status Codes
 
