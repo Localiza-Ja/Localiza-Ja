@@ -27,7 +27,9 @@ class Entrega(db.Model):
     numero_pedido = db.Column(db.String(6), nullable=False, unique=True)
     status = db.Column(db.Enum(StatusEntrega), default=StatusEntrega.PENDENTE)
     nome_cliente = db.Column(db.String(255), nullable=False)
+    nome_recebido = db.Column(db.String(255), nullable=False)
     descricao = db.Column(db.String(255), nullable=True)
+    observacao = db.Column(db.String(255), nullable=True)
     criado_em = db.Column(db.DateTime, default=db.func.current_timestamp())
     atualizado_em = db.Column(db.DateTime, default=db.func.current_timestamp(), onupdate=db.func.current_timestamp())
 
