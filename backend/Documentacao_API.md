@@ -1,6 +1,6 @@
 # Documentação da API de Sensores
 
-Este documento fornece instruções detalhadas sobre como utilizar a **API de Sensores**, uma API RESTful construída com Flask para gerenciamento de dados de sensores. A API permite recuperar informações de sensores, com endpoints protegidos por autenticação JWT, além de um endpoint para verificar a conectividade. As seções a seguir descrevem a configuração, os endpoints, formatos de requisição/resposta e exemplos de uso.
+Este documento fornece instruções detalhadas sobre como utilizar a **API de Sensores**, uma API RESTful construída com Flask para gerenciamento de dados de sensores. A API permite recuperar, criar, editar e deletar informações de sensores, com endpoints protegidos por autenticação JWT (ainda não implementada nos métodos, mas suportada no código), além de um endpoint para verificar a conectividade. As seções a seguir descrevem a configuração, os endpoints, formatos de requisição/resposta e exemplos de uso.
 
 ## Sumário
 
@@ -12,9 +12,16 @@ Este documento fornece instruções detalhadas sobre como utilizar a **API de Se
 6. [Endpoints](#endpoints)
    - [GET /ping](#get-ping)
    - [GET /sensor_api](#get-sensor_api)
-   - [GET /sensor_api/<id>](#get-sensor_apiid)
+   - [GET /sensor_api/<sensor_id>](#get-sensor_api-sensor_id)
+   - [POST /sensor_api](#post-sensor_api)
+   - [PUT /sensor_api/<sensor_id>](#put-sensor_api-sensor_id)
+   - [DELETE /sensor_api/<sensor_id>](#delete-sensor_api-sensor_id)
 7. [Exemplo de Uso](#exemplo-de-uso)
 8. [Dependências](#dependências)
+
+## Visão Geral
+
+A API de Sensores é projetada para gerenciar dados de sensores armazenados em um banco de dados PostgreSQL. Ela oferece endpoints para verificar a conectividade, listar todos os sensores, buscar um sensor específico por ID, criar novos sensores, editar sensores existentes e deletá-los. A autenticação JWT está disponível, mas não está ativa por padrão nos métodos atuais.
 
 ## Configuração e Instalação
 
@@ -48,7 +55,7 @@ Para executar a API localmente, siga os passos abaixo:
    ```
 
 5. **Configurar Variáveis de Ambiente**:
-   Crie um arquivo `.env` na raiz do projeto com as seguintes variáveis (Há um copia `copia.env`):
+   Crie um arquivo `.env` na raiz do projeto com as seguintes variáveis (baseado em `copia.env`):
 
    ```bash
    DATABASE_URL=postgresql://<usuário>:<senha>@<host>:<porta>/<banco-de-dados>
@@ -75,6 +82,7 @@ Os status de respostas possíveis para esta API são:
 | Status Code | Descrição                                          |
 | ----------- | -------------------------------------------------- |
 | 200         | `OK`                                               |
+| 201         | `CREATED (CRIADO)`                                 |
 | 400         | `BAD REQUEST (REQUISIÇÃO FALHOU)`                  |
 | 404         | `NOT FOUND (NÃO ENCONTRADO)`                       |
 | 422         | `UNPROCESSABLE ENTITY (ENTIDADE NÃO PROCESSADA)`   |
@@ -101,16 +109,17 @@ Os endpoints da API sempre retornam uma das três estruturas de resposta abaixo,
    }
    ```
 
-3. **Sucesso na requisição (200)**:
+3. **Sucesso na requisição (200, 201)**:
    ```json
    {
      "status": true,
+     "message": "string",
      "...": "..."
    }
    ```
 
-- O atributo `message` é retornado quando a requisição encontra uma condição inesperada, resultando em um erro interno (Status Code: 500).
-- Os atributos `error` e `status` são retornados quando a requisição não é concluída com sucesso, indicando o motivo do erro e o status `false`.
+- O atributo `message` é retornado em casos de sucesso ou erro interno (status 500).
+- Os atributos `error` e `status` são retornados em erros de requisição (status 400, 404, 422).
 - Atributos adicionais específicos (como `Sensor` ou `pong`) são incluídos na resposta, dependendo do endpoint.
 
 ## Endpoints
@@ -135,10 +144,11 @@ Verifica se a API está em funcionamento.
   ```json
   {
     "pong": true,
+    "message": "API está no ar com sucesso.",
     "status": true
   }
   ```
-- **Em caso de erro** (Status Code: 500):
+- **Em caso de erro interno** (Status Code: 500):
   ```json
   {
     "message": "Erro interno no servidor"
@@ -150,6 +160,7 @@ Verifica se a API está em funcionamento.
 ```json
 {
   "pong": true,
+  "message": "API está no ar com sucesso.",
   "status": true
 }
 ```
@@ -181,13 +192,14 @@ Recupera a lista de todos os sensores armazenados no banco de dados.
       },
       ...
     ],
+    "message": "Sensores encontrados com sucesso.",
     "status": true
   }
   ```
-- **Em caso de erro** (Status Code: 400, 404, 422):
+- **Em caso de erro** (Status Code: 404):
   ```json
   {
-    "error": "mensagem de erro",
+    "error": "Nenhum sensor encontrado",
     "status": false
   }
   ```
@@ -214,23 +226,24 @@ Recupera a lista de todos os sensores armazenados no banco de dados.
       "dados": "60%"
     }
   ],
+  "message": "Sensores encontrados com sucesso.",
   "status": true
 }
 ```
 
-### GET /sensor_api/<id>
+### GET /sensor_api/<sensor_id>
 
 Recupera os dados de um sensor específico com base no seu ID.
 
 #### Requisição
 
 - **Método**: GET
-- **URL**: `/sensor_api/<id>`
+- **URL**: `/sensor_api/<sensor_id>`
 - **Cabeçalhos**: Nenhum
 - **Parâmetros de URL**:
   | Parâmetro | Tipo | Descrição |
-  |-----------|------|-----------|
-  | `id` | `string` | **Obrigatório**. ID (UUID) do sensor a ser recuperado. |
+  |-------------|--------|----------------------------------|
+  | `sensor_id` | `string` | **Obrigatório**. ID (UUID) do sensor a ser recuperado. |
 - **Parâmetros de Consulta**: Nenhum
 - **Corpo**: Nenhum
 
@@ -246,13 +259,14 @@ Recupera os dados de um sensor específico com base no seu ID.
       "tipo": "<tipo-do-sensor>",
       "dados": "<dados-do-sensor>"
     },
+    "message": "Sensor encontrado com sucesso.",
     "status": true
   }
   ```
-- **Em caso de erro** (Status Code: 400, 404, 422):
+- **Em caso de erro** (Status Code: 404):
   ```json
   {
-    "error": "mensagem de erro",
+    "error": "Sensor com ID <sensor_id> não encontrado",
     "status": false
   }
   ```
@@ -272,8 +286,233 @@ Recupera os dados de um sensor específico com base no seu ID.
     "tipo": "temperatura",
     "dados": "25.5"
   },
+  "message": "Sensor encontrado com sucesso.",
   "status": true
 }
+```
+
+### POST /sensor_api
+
+Cria um novo sensor no banco de dados.
+
+#### Requisição
+
+- **Método**: POST
+- **URL**: `/sensor_api`
+- **Cabeçalhos**: `Content-Type: application/json`
+- **Parâmetros**: Nenhum
+- **Corpo**:
+  ```json
+  {
+    "tipo": "string",
+    "dados": "string"
+  }
+  ```
+
+#### Resposta
+
+- **Código de Status**: 201 CREATED
+- **Tipo de Conteúdo**: application/json
+- **Corpo**:
+  ```json
+  {
+    "Sensor": {
+      "id": "<uuid-string>",
+      "tipo": "<tipo-do-sensor>",
+      "dados": "<dados-do-sensor>"
+    },
+    "message": "Sensor criado com sucesso.",
+    "status": true
+  }
+  ```
+- **Em caso de erro** (Status Code: 400):
+  ```json
+  {
+    "error": "Dados inválidos: <mensagem>",
+    "status": false
+  }
+  ```
+- **Em caso de erro interno** (Status Code: 500):
+  ```json
+  {
+    "message": "Erro interno no servidor"
+  }
+  ```
+
+#### Exemplo de Resposta
+
+```json
+{
+  "Sensor": {
+    "id": "123e4567-e89b-12d3-a456-426614174000",
+    "tipo": "temperatura",
+    "dados": "25.5"
+  },
+  "message": "Sensor criado com sucesso.",
+  "status": true
+}
+```
+
+### PUT /sensor_api/<sensor_id>
+
+Edita os dados de um sensor existente com base no seu ID.
+
+#### Requisição
+
+- **Método**: PUT
+- **URL**: `/sensor_api/<sensor_id>`
+- **Cabeçalhos**: `Content-Type: application/json`
+- **Parâmetros de URL**:
+  | Parâmetro | Tipo | Descrição |
+  |-------------|--------|----------------------------------|
+  | `sensor_id` | `string` | **Obrigatório**. ID (UUID) do sensor a ser editado. |
+- **Parâmetros de Consulta**: Nenhum
+- **Corpo**:
+  ```json
+  {
+    "tipo": "string",
+    "dados": "string"
+  }
+  ```
+
+#### Resposta
+
+- **Código de Status**: 200 OK
+- **Tipo de Conteúdo**: application/json
+- **Corpo**:
+  ```json
+  {
+    "Sensor": {
+      "id": "<uuid-string>",
+      "tipo": "<tipo-do-sensor>",
+      "dados": "<dados-do-sensor>"
+    },
+    "message": "Sensor editado com sucesso.",
+    "status": true
+  }
+  ```
+- **Em caso de erro** (Status Code: 404):
+  ```json
+  {
+    "error": "Sensor com ID <sensor_id> não encontrado",
+    "status": false
+  }
+  ```
+- **Em caso de erro interno** (Status Code: 500):
+  ```json
+  {
+    "message": "Erro interno no servidor"
+  }
+  ```
+
+#### Exemplo de Resposta
+
+```json
+{
+  "Sensor": {
+    "id": "123e4567-e89b-12d3-a456-426614174000",
+    "tipo": "temperatura",
+    "dados": "26.0"
+  },
+  "message": "Sensor editado com sucesso.",
+  "status": true
+}
+```
+
+### DELETE /sensor_api/<sensor_id>
+
+Deleta um sensor específico com base no seu ID.
+
+#### Requisição
+
+- **Método**: DELETE
+- **URL**: `/sensor_api/<sensor_id>`
+- **Cabeçalhos**: Nenhum
+- **Parâmetros de URL**:
+  | Parâmetro | Tipo | Descrição |
+  |-------------|--------|----------------------------------|
+  | `sensor_id` | `string` | **Obrigatório**. ID (UUID) do sensor a ser deletado. |
+- **Parâmetros de Consulta**: Nenhum
+- **Corpo**: Nenhum
+
+#### Resposta
+
+- **Código de Status**: 200 OK
+- **Tipo de Conteúdo**: application/json
+- **Corpo**:
+  ```json
+  {
+    "Sensor": {
+      "id": "<uuid-string>",
+      "tipo": "<tipo-do-sensor>",
+      "dados": "<dados-do-sensor>"
+    },
+    "message": "Sensor excluído com sucesso.",
+    "status": true
+  }
+  ```
+- **Em caso de erro** (Status Code: 404):
+  ```json
+  {
+    "message": "Sensor com ID <sensor_id> não encontrado",
+    "status": false
+  }
+  ```
+- **Em caso de erro interno** (Status Code: 500):
+  ```json
+  {
+    "message": "Erro interno no servidor"
+  }
+  ```
+
+#### Exemplo de Resposta
+
+```json
+{
+  "Sensor": {
+    "id": "123e4567-e89b-12d3-a456-426614174000",
+    "tipo": "temperatura",
+    "dados": "25.5"
+  },
+  "message": "Sensor excluído com sucesso.",
+  "status": true
+}
+```
+
+## Exemplo de Uso
+
+### Listar Todos os Sensores
+
+```bash
+curl -X GET http://0.0.0.0:5000/sensor_api
+```
+
+### Buscar um Sensor Específico
+
+```bash
+curl -X GET http://0.0.0.0:5000/sensor_api/123e4567-e89b-12d3-a456-426614174000
+```
+
+### Criar um Novo Sensor
+
+```bash
+curl -X POST http://0.0.0.0:5000/sensor_api \
+-H "Content-Type: application/json" \
+-d '{"tipo": "temperatura", "dados": "25.5"}'
+```
+
+### Editar um Sensor
+
+```bash
+curl -X PUT http://0.0.0.0:5000/sensor_api/123e4567-e89b-12d3-a456-426614174000 \
+-H "Content-Type: application/json" \
+-d '{"tipo": "temperatura", "dados": "26.0"}'
+```
+
+### Deletar um Sensor
+
+```bash
+curl -X DELETE http://0.0.0.0:5000/sensor_api/123e4567-e89b-12d3-a456-426614174000
 ```
 
 ## Dependências
@@ -283,7 +522,7 @@ A API depende dos seguintes pacotes Python principais (conforme especificado no 
 - **Flask==3.1.2**: Framework web para construção da API.
 - **Flask-RESTful==0.3.10**: Extensão para criação de APIs REST.
 - **Flask-SQLAlchemy==3.1.1**: ORM para interações com o banco de dados.
-- **Flask-JWT-Extended==4.7.1**: Autenticação com JWT.
+- **Flask-JWT-Extended==4.7.1**: Autenticação com JWT (não ativada por padrão).
 - **psycopg2-binary==2.9.10**: Adaptador para banco de dados PostgreSQL.
 - **python-dotenv==1.1.1**: Gerenciamento de variáveis de ambiente.
 
@@ -292,5 +531,7 @@ Para a lista completa, consulte o arquivo `requirements.txt`.
 ## Observações
 
 - Certifique-se de que o banco de dados PostgreSQL esteja configurado e acessível antes de executar a API.
+- A autenticação JWT pode ser ativada adicionando `@jwt_required()` aos métodos em `routes.py`.
+- O modo debug está ativo em `main.py` (`debug=True`). Desative-o em produção e use um servidor WSGI como Gunicorn.
 
 Esta documentação deve ajudar desenvolvedores a integrar a API de Sensores em suas aplicações de forma eficaz. Para mais assistência, entre em contato com os mantenedores da API.

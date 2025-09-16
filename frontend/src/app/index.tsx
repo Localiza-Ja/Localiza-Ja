@@ -1,175 +1,138 @@
+// ARQUIVO: frontend/src/app/index.tsx (Ajuste Final de zIndex)
+
 import {
   View,
-  Text,
   TextInput,
-  TextInputProps,
-  TouchableOpacity,
-  Image,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
 } from "react-native";
+import { useSharedValue } from "react-native-reanimated";
 import { router } from "expo-router";
-import { useState, useRef, forwardRef } from "react";
-import { LinearGradient } from "expo-linear-gradient";
+import { useState, useRef } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
+import InputField from "../components/InputField";
+import CustomButton from "../components/CustomButton";
+import HeaderSection from "../components/HeaderSection";
+import CustomDropdown from "../components/CustomDropdown";
+import { SPACING } from "../styles/theme";
 
-interface InputFieldProps extends TextInputProps {
-  label: string;
-  placeholder?: string;
-}
-const InputField = forwardRef<TextInput, InputFieldProps>((props, ref) => {
-  const { label, ...rest } = props;
-  return (
-    <View className="w-full mb-4">
-      <Text className="text-gray-500 font-semibold mb-2 ml-1">{label}</Text>
-      <TextInput
-        ref={ref}
-        className="w-full bg-[#F3F7FB] p-4 rounded-xl text-base text-[#22212E]"
-        placeholderTextColor="#ADB5BD"
-        {...rest}
-      />
-    </View>
-  );
-});
-InputField.displayName = "InputField";
-
-interface HeaderSectionProps {
-  name: string;
-  tips: string;
-}
-const HeaderSection = ({ name, tips }: HeaderSectionProps) => (
-  <LinearGradient
-    colors={["#FCA14E", "#FFE6CE"]}
-    style={{
-      width: "100%",
-      borderBottomLeftRadius: 40,
-      borderBottomRightRadius: 40,
-      paddingHorizontal: 24,
-      paddingVertical: 32,
-      flex: 11,
-      justifyContent: "center",
-    }}
-  >
-    <Image
-      source={require("../../assets/images/truck.png")}
-      style={{
-        position: "absolute",
-        right: "-20%",
-        top: "15%",
-        width: "70%",
-        height: 150,
-        resizeMode: "contain",
-      }}
-    />
-    <View style={{ marginBottom: 40 }}>
-      <Text className="text-2xl font-bold mb-1 text-[#22212E]">
-        Olá, {name}
-      </Text>
-      <Text className="text-4xl font-bold text-[#22212E]">Localiza Já</Text>
-    </View>
-    <View>
-      <Text className="text-base italic font-medium text-[#22212E]">
-        {tips}
-      </Text>
-    </View>
-  </LinearGradient>
-);
-
-interface ButtonProps {
-  title: string;
-  onPress: () => void;
-}
-const CustomButton = ({ title, onPress }: ButtonProps) => (
-  <TouchableOpacity
-    className="w-full bg-[#22212E] p-4 rounded-full shadow-md active:opacity-80"
-    onPress={onPress}
-  >
-    <Text className="text-white text-center text-lg font-bold">{title}</Text>
-  </TouchableOpacity>
-);
+type UserType = "motorista" | "cliente" | null;
 
 export default function Login() {
+  const [userType, setUserType] = useState<UserType>(null);
+  const [pedido, setPedido] = useState("");
   const [cnh, setCnh] = useState("");
   const [placa, setPlaca] = useState("");
-  const [empresa, setEmpresa] = useState("");
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false); // <-- NOVO ESTADO
 
   const placaInputRef = useRef<TextInput>(null);
-  const empresaInputRef = useRef<TextInput>(null);
+  const keyboardAnimation = useSharedValue(0);
+  const userTypeData = [
+    { label: "Motorista", value: "motorista" },
+    { label: "Cliente", value: "cliente" },
+  ];
 
-  const handleLogin = () => {
-    router.push("/map");
+  const handleAccess = () => {
+    if (userType === "motorista") {
+      router.push("/map");
+    } else if (userType === "cliente") {
+      alert(`Rastreando pedido: ${pedido}`);
+    }
   };
 
-  const tips =
-    "Dicas do dia:\n- Não esqueça de conferir se todo o material está carregado;\n- Verifique se a carga está bem lacrada;\n- E o mais importante, verifique as condições do veículo.";
+  const renderForm = () => {
+    // ... (esta função não muda) ...
+    if (userType === "cliente") {
+      return (
+        <InputField
+          label="Número do pedido"
+          placeholder="XXXXXXXXXXXX"
+          value={pedido}
+          onChangeText={setPedido}
+          keyboardType="numeric"
+        />
+      );
+    }
+    if (userType === "motorista") {
+      return (
+        <>
+          <InputField
+            label="CNH"
+            placeholder="XX-XXXXX-XXXX"
+            value={cnh}
+            onChangeText={setCnh}
+            returnKeyType="next"
+            onSubmitEditing={() => placaInputRef.current?.focus()}
+            blurOnSubmit={false}
+          />
+          <InputField
+            ref={placaInputRef}
+            label="PLACA VEÍCULO"
+            placeholder="ABC 1234"
+            value={placa}
+            onChangeText={setPlaca}
+            returnKeyType="done"
+            onSubmitEditing={handleAccess}
+          />
+        </>
+      );
+    }
+    return null;
+  };
 
   return (
     <SafeAreaView
-      style={{ flex: 1, backgroundColor: "#FFF" }}
+      className="flex-1 bg-background"
       edges={["right", "left", "bottom"]}
     >
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={{ flex: 1 }}
-      >
-        <View style={{ flex: 1 }}>
-          <View style={{ flex: 11 }}>
-            <HeaderSection name="Richard" tips={tips} />
-          </View>
+      <View className="flex-1">
+        <HeaderSection
+          name="seja bem vindo(a)!"
+          tips="Mais eficiência para quem entrega, mais tranquilidade para quem recebe."
+          keyboardAnimation={keyboardAnimation}
+        />
 
-          <View
-            style={{
-              flex: 9,
-              padding: 24,
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          className="flex-1"
+        >
+          <ScrollView
+            className="flex-1"
+            contentContainerStyle={{
+              flexGrow: 1,
               justifyContent: "space-between",
-              backgroundColor: "#FFF",
+              padding: SPACING[6],
             }}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            // --- NOVA PROP PARA CONTROLAR A ROLAGEM QUANDO O DROPDOWN ESTÁ ABERTO ---
+            scrollEnabled={!isDropdownOpen}
           >
-            <ScrollView
-              style={{ marginBottom: 20 }}
-              contentContainerStyle={{
-                flexGrow: 1,
-                justifyContent: "flex-end",
-              }}
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}
-            >
-              <View>
-                <InputField
-                  label="CNH"
-                  placeholder="XX-XXXXX-XXXX"
-                  value={cnh}
-                  onChangeText={setCnh}
-                  returnKeyType="next"
-                  onSubmitEditing={() => placaInputRef.current?.focus()}
-                  blurOnSubmit={false}
-                />
-                <InputField
-                  ref={placaInputRef}
-                  label="PLACA VEICULO"
-                  placeholder="ABC 1234"
-                  value={placa}
-                  onChangeText={setPlaca}
-                  returnKeyType="next"
-                  onSubmitEditing={() => empresaInputRef.current?.focus()}
-                  blurOnSubmit={false}
-                />
-                <InputField
-                  ref={empresaInputRef}
-                  label="EMPRESA"
-                  placeholder="Nacional LTDA"
-                  value={empresa}
-                  onChangeText={setEmpresa}
-                  returnKeyType="done"
-                  onSubmitEditing={handleLogin}
-                />
-              </View>
-            </ScrollView>
-            <CustomButton title="Acessar" onPress={handleLogin} />
-          </View>
-        </View>
-      </KeyboardAvoidingView>
+            {/* Envolvemos o formulário em uma View para aplicar o zIndex */}
+            <View style={{ zIndex: isDropdownOpen ? 100 : 0 }}>
+              <CustomDropdown
+                label="Motorista ou Cliente"
+                placeholder="Selecione abaixo"
+                data={userTypeData}
+                value={userType}
+                onChange={(item) => {
+                  setUserType(item.value as UserType);
+                }}
+                onFocus={() => setIsDropdownOpen(true)}
+                onBlur={() => setIsDropdownOpen(false)}
+              />
+              {renderForm()}
+            </View>
+
+            <CustomButton
+              title={userType === "cliente" ? "Rastrear" : "Acessar"}
+              onPress={handleAccess}
+              disabled={!userType}
+            />
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </View>
     </SafeAreaView>
   );
 }

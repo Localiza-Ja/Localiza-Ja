@@ -1,16 +1,23 @@
+// ARQUIVO: frontend/src/app/_layout.tsx
+
+import "react-native-gesture-handler";
+
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { Stack } from "expo-router";
-import "../styles/global.css"; // Mantenha para Tailwind
+import "../styles/global.css";
 
 export default function RootLayout() {
   return (
-    <Stack
-      screenOptions={{
-        headerShown: false, // Esconde headers por padrão
-      }}
-    >
-      <Stack.Screen name="index" /> {/* Tela de Login */}
-      <Stack.Screen name="map" /> {/* Tela de Mapa */}
-      <Stack.Screen name="deliveries" /> {/* Tela de Entregas */}
-    </Stack>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <Stack
+        screenOptions={{
+          headerShown: false,
+        }}
+      >
+        <Stack.Screen name="index" />
+        <Stack.Screen name="map" />
+        <Stack.Screen name="deliveries" />
+      </Stack>
+    </GestureHandlerRootView>
   );
 }
