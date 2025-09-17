@@ -1,15 +1,14 @@
-// ARQUIVO: frontend/src/app/index.tsx (Ajuste Final de zIndex)
-
 import {
   View,
   TextInput,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Keyboard,
 } from "react-native";
-import { useSharedValue } from "react-native-reanimated";
+import { useSharedValue, withTiming } from "react-native-reanimated";
 import { router } from "expo-router";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import InputField from "../components/InputField";
 import CustomButton from "../components/CustomButton";
@@ -24,10 +23,32 @@ export default function Login() {
   const [pedido, setPedido] = useState("");
   const [cnh, setCnh] = useState("");
   const [placa, setPlaca] = useState("");
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false); // <-- NOVO ESTADO
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
   const placaInputRef = useRef<TextInput>(null);
   const keyboardAnimation = useSharedValue(0);
+
+  // Hook que escuta os eventos do teclado para disparar a animação do Header
+  useEffect(() => {
+    const keyboardDidShowListener = Keyboard.addListener(
+      "keyboardDidShow",
+      () => {
+        keyboardAnimation.value = withTiming(1, { duration: 300 });
+      }
+    );
+    const keyboardDidHideListener = Keyboard.addListener(
+      "keyboardDidHide",
+      () => {
+        keyboardAnimation.value = withTiming(0, { duration: 300 });
+      }
+    );
+
+    return () => {
+      keyboardDidHideListener.remove();
+      keyboardDidShowListener.remove();
+    };
+  }, []);
+
   const userTypeData = [
     { label: "Motorista", value: "motorista" },
     { label: "Cliente", value: "cliente" },
@@ -42,7 +63,6 @@ export default function Login() {
   };
 
   const renderForm = () => {
-    // ... (esta função não muda) ...
     if (userType === "cliente") {
       return (
         <InputField
@@ -106,14 +126,12 @@ export default function Login() {
             }}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
-            // --- NOVA PROP PARA CONTROLAR A ROLAGEM QUANDO O DROPDOWN ESTÁ ABERTO ---
             scrollEnabled={!isDropdownOpen}
           >
-            {/* Envolvemos o formulário em uma View para aplicar o zIndex */}
             <View style={{ zIndex: isDropdownOpen ? 100 : 0 }}>
               <CustomDropdown
                 label="Motorista ou Cliente"
-                placeholder="Selecione abaixo"
+                placeholder="Clique aqui"
                 data={userTypeData}
                 value={userType}
                 onChange={(item) => {

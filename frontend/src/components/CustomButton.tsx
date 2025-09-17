@@ -13,7 +13,7 @@ const CustomButton = ({ title, onPress, disabled }: ButtonProps) => (
     // Aplicamos estilos diferentes quando está desabilitado
     className={`
       w-full p-4 rounded-full shadow-md
-      ${disabled ? "bg-gray-400" : "bg-text-primary active:opacity-80"}
+      ${disabled ? "bg-gray-600" : "bg-text-primary active:opacity-80"}
     `}
     onPress={onPress}
     disabled={disabled} // Passamos a prop para o componente

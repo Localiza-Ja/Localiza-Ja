@@ -10,6 +10,7 @@ module.exports = {
   theme: {
     extend: {
       colors: {
+        // Cores antigas (mantemos para não quebrar o código existente)
         primary: "#FCA14E",
         "gradient-end": "#FFE6CE",
         background: "#FFF",
@@ -17,6 +18,27 @@ module.exports = {
         "text-secondary": "#6c757d",
         placeholder: "#ADB5BD",
         "input-background": "#F3F7FB",
+        border: "#CED4DA",
+
+        // --- NOVAS OPÇÕES DE CORES ---
+        white: "#FFFFFF",
+        black: "#000000",
+        // Paleta de Cinzas
+        gray: {
+          100: "#F8F9FA", // Super claro
+          200: "#E9ECEF", // Borda sutil
+          300: "#DEE2E6",
+          400: "#CED4DA",
+          500: "#ADB5BD", // Cor do seu placeholder
+          600: "#6C757D", // Cor do seu text-secondary
+          700: "#495057",
+          800: "#343A40",
+          900: "#212529", // Super escuro
+        },
+        // Cores de Feedback
+        success: "#28a745",
+        danger: "#dc3545",
+        warning: "#ffc107",
       },
       fontSize: {
         // Mapeando para as classes do Tailwind (ex: text-sm, text-base)
