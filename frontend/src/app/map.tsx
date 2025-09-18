@@ -1,16 +1,16 @@
+// src/app/map.tsx
 
 import { router } from "expo-router";
 import { View, StyleSheet } from "react-native";
 import { StatusBar } from 'expo-status-bar';
 import MapView, { Marker } from "react-native-maps";
-import React, { useMemo, useRef, useState, useEffect } from "react";
-import BottomSheet from "@gorhom/bottom-sheet";
+import React, { useRef, useState, useEffect } from "react";
 import * as Location from 'expo-location';
 
 import { deliveries } from "../data/deliveries";
 import { Delivery } from "../types";
-import DeliveriesList from "../components/DeliveriesList";
 import AppHeader from "../components/AppHeader";
+import DeliveryPanel from "../components/DeliveryPanel"; // <-- A ÚNICA PEÇA DO PAINEL AQUI
 
 const appLogo = require("../../assets/images/nt2-logo.png");
 
@@ -19,9 +19,7 @@ export default function MapScreen() {
   const [selectedDelivery, setSelectedDelivery] = useState<Delivery | null>(deliveries[0] || null);
   const [deliveriesData, setDeliveriesData] = useState<Delivery[]>(deliveries);
   const [driverLocation, setDriverLocation] = useState<Location.LocationObject | null>(null);
-  
- 
-  const [activeSnapIndex, setActiveSnapIndex] = useState(1); 
+
   useEffect(() => {
     let subscription: Location.LocationSubscription | null = null;
     const startWatching = async () => {
@@ -53,9 +51,6 @@ export default function MapScreen() {
     longitudeDelta: 0.1,
   };
   
-
-  const snapPoints = useMemo(() => ["15%", "60%", "95%"], []);
-  
   const handleLogout = () => router.push("/");
 
   function handleDeliveryPress(delivery: Delivery) {
@@ -69,12 +64,7 @@ export default function MapScreen() {
   }
 
   function handleUpdateStatus(deliveryId: number, newStatus: string) {
-    const updatedDeliveries = deliveriesData.map((delivery) => {
-      if (delivery.id === deliveryId) {
-        return { ...delivery, status: newStatus };
-      }
-      return delivery;
-    });
+    const updatedDeliveries = deliveriesData.map((d) => (d.id === deliveryId ? { ...d, status: newStatus } : d));
     setDeliveriesData(updatedDeliveries);
   }
 
@@ -92,10 +82,7 @@ export default function MapScreen() {
         {driverLocation && (
           <Marker
             key="driver"
-            coordinate={{
-              latitude: driverLocation.coords.latitude,
-              longitude: driverLocation.coords.longitude,
-            }}
+            coordinate={{ latitude: driverLocation.coords.latitude, longitude: driverLocation.coords.longitude }}
             title="Sua Posição"
             pinColor="blue"
           />
@@ -104,22 +91,14 @@ export default function MapScreen() {
 
       <AppHeader logoSource={appLogo} onLogout={handleLogout} />
 
-      <BottomSheet 
-        index={1} 
-        snapPoints={snapPoints} 
-        onChange={(index) => setActiveSnapIndex(index)} 
-        handleIndicatorStyle={{ backgroundColor: '#010409ff', width: 50 }} 
-        backgroundStyle={{ backgroundColor: 'white' }}
-      >
-        
-        <DeliveriesList
-          data={deliveriesData}
-          onDeliveryPress={handleDeliveryPress}
-          onUpdateStatus={handleUpdateStatus}
-          activeSnapIndex={activeSnapIndex}
-          selectedDelivery={selectedDelivery}
-        />
-      </BottomSheet>
+      {/* AGORA SIM: A tela do mapa só se preocupa em renderizar o painel */}
+      <DeliveryPanel
+        deliveriesData={deliveriesData}
+        selectedDelivery={selectedDelivery}
+        onDeliveryPress={handleDeliveryPress}
+        onUpdateStatus={handleUpdateStatus}
+        onLogout={handleLogout}
+      />
     </View>
   );
 }
