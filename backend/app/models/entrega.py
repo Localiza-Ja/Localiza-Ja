@@ -12,7 +12,7 @@ import enum
 
 class StatusEntrega(enum.Enum):
     PENDENTE = "pendente"
-    EM_ROTA = "em_rota"
+    EM_ROTA = "em rota"
     ENTREGUE = "entregue"
     CANCELADA = "cancelada"
 
@@ -23,6 +23,7 @@ class Entrega(db.Model):
     __tablename__ = 'entrega'
 
     id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    motorista_id = db.Column(UUID(as_uuid=True), db.ForeignKey("usuario.id"), nullable=False)
     endereco_entrega = db.Column(db.String(255), nullable=False)
     numero_pedido = db.Column(db.String(6), nullable=False, unique=True)
     status = db.Column(db.Enum(StatusEntrega), default=StatusEntrega.PENDENTE)
@@ -35,6 +36,7 @@ class Entrega(db.Model):
 
     # Relacionamento: uma entrega pode ter várias localizações
     localizacoes = db.relationship("Localizacao", back_populates="entrega")
+    motorista = db.relationship("Usuario", back_populates="localizacoes")
 
     def json(self):
         return {
