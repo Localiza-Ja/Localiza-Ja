@@ -17,8 +17,9 @@ class Usuario(db.Model):
 
     id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     nome = db.Column(db.String(255), nullable=False)
-    placa_veiculo = db.Column(db.String(7), nullable=True)
-    cnh = db.Column(db.String(11), nullable=True)
+    placa_veiculo = db.Column(db.String(7), nullable=False)
+    cnh = db.Column(db.String(11), nullable=False)
+    telefone = db.Column(db.String(11), nullable=False)
     criado_em = db.Column(db.DateTime, default=db.func.current_timestamp())
     atualizado_em = db.Column(db.DateTime, default=db.func.current_timestamp(), onupdate=db.func.current_timestamp())
 
