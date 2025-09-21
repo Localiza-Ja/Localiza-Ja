@@ -26,28 +26,37 @@ export default function Login() {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
   const placaInputRef = useRef<TextInput>(null);
+  const dropdownRef = useRef<{ open: () => void }>(null);
+  const [isKeyboardVisible, setKeyboardVisible] = useState(false);
+  const [openDropdownOnKeyboardHide, setOpenDropdownOnKeyboardHide] =
+    useState(false);
   const keyboardAnimation = useSharedValue(0);
 
-  // Hook que escuta os eventos do teclado para disparar a animação do Header
   useEffect(() => {
-    const keyboardDidShowListener = Keyboard.addListener(
-      "keyboardDidShow",
-      () => {
-        keyboardAnimation.value = withTiming(1, { duration: 300 });
+    const showEvent =
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent =
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+
+    const showListener = Keyboard.addListener(showEvent, () => {
+      setKeyboardVisible(true);
+      keyboardAnimation.value = withTiming(1, { duration: 250 });
+    });
+    const hideListener = Keyboard.addListener(hideEvent, () => {
+      setKeyboardVisible(false);
+      keyboardAnimation.value = withTiming(0, { duration: 250 });
+
+      if (openDropdownOnKeyboardHide) {
+        dropdownRef.current?.open();
+        setOpenDropdownOnKeyboardHide(false);
       }
-    );
-    const keyboardDidHideListener = Keyboard.addListener(
-      "keyboardDidHide",
-      () => {
-        keyboardAnimation.value = withTiming(0, { duration: 300 });
-      }
-    );
+    });
 
     return () => {
-      keyboardDidHideListener.remove();
-      keyboardDidShowListener.remove();
+      hideListener.remove();
+      showListener.remove();
     };
-  }, []);
+  }, [openDropdownOnKeyboardHide]);
 
   const userTypeData = [
     { label: "Motorista", value: "motorista" },
@@ -101,6 +110,15 @@ export default function Login() {
     return null;
   };
 
+  const handleDropdownPress = () => {
+    if (isKeyboardVisible) {
+      setOpenDropdownOnKeyboardHide(true);
+      Keyboard.dismiss();
+    } else {
+      dropdownRef.current?.open();
+    }
+  };
+
   return (
     <SafeAreaView
       className="flex-1 bg-background"
@@ -112,7 +130,6 @@ export default function Login() {
           tips="Mais eficiência para quem entrega, mais tranquilidade para quem recebe."
           keyboardAnimation={keyboardAnimation}
         />
-
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           className="flex-1"
@@ -128,21 +145,22 @@ export default function Login() {
             showsVerticalScrollIndicator={false}
             scrollEnabled={!isDropdownOpen}
           >
-            <View style={{ zIndex: isDropdownOpen ? 100 : 0 }}>
-              <CustomDropdown
-                label="Motorista ou Cliente"
-                placeholder="Clique aqui"
-                data={userTypeData}
-                value={userType}
-                onChange={(item) => {
-                  setUserType(item.value as UserType);
-                }}
-                onFocus={() => setIsDropdownOpen(true)}
-                onBlur={() => setIsDropdownOpen(false)}
-              />
+            <View>
+              <View style={{ zIndex: isDropdownOpen ? 100 : 0 }}>
+                <CustomDropdown
+                  ref={dropdownRef}
+                  label="Motorista ou Cliente"
+                  placeholder="Clique aqui"
+                  data={userTypeData}
+                  value={userType}
+                  onChange={(item) => setUserType(item.value as UserType)}
+                  onFocus={() => setIsDropdownOpen(true)}
+                  onBlur={() => setIsDropdownOpen(false)}
+                  onPress={handleDropdownPress}
+                />
+              </View>
               {renderForm()}
             </View>
-
             <CustomButton
               title={userType === "cliente" ? "Rastrear" : "Acessar"}
               onPress={handleAccess}

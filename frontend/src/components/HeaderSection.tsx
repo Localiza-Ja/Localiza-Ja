@@ -33,7 +33,7 @@ const HeaderSection = ({
     const height = interpolate(
       keyboardAnimation.value,
       [0, 1], // De teclado escondido (0) para visível (1)
-      [screenHeight * 0.4, screenHeight * 0.12] // Altura vai de 40% para 12%
+      [screenHeight * 0.4, screenHeight * 0.16] // Altura vai de 40% para 12%
     );
     return { height };
   });
