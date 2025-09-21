@@ -1,3 +1,5 @@
+//frontend/src/components/CustomDropdown.tsx
+
 import React, {
   useRef,
   forwardRef,
@@ -16,6 +18,7 @@ import Animated, {
   interpolateColor,
   interpolate,
 } from "react-native-reanimated";
+import { Platform } from "react-native";
 
 interface DropdownItem {
   label: string;
@@ -89,6 +92,7 @@ const CustomDropdown = forwardRef(
       scale.value = withSpring(0.98);
       pressProgress.value = withTiming(1, { duration: 100 });
     };
+
     const handlePressOut = () => {
       scale.value = withSpring(1);
       pressProgress.value = withTiming(0, { duration: 200 });
@@ -111,6 +115,7 @@ const CustomDropdown = forwardRef(
               styles.listItemText,
               isSelected && styles.selectedListItemText,
             ]}
+            allowFontScaling={false}
           >
             {item.label}
           </Text>
@@ -120,7 +125,10 @@ const CustomDropdown = forwardRef(
 
     return (
       <View className="w-full mb-4">
-        <Text className="text-text-secondary font-semibold mb-2 ml-1 text-sm">
+        <Text
+          className="text-text-secondary font-semibold mb-2 ml-1 text-sm"
+          allowFontScaling={false}
+        >
           {label}
         </Text>
         <View style={{ position: "relative", width: "100%", height: 58 }}>
@@ -135,6 +143,7 @@ const CustomDropdown = forwardRef(
                 style={
                   value ? styles.selectedTextStyle : styles.placeholderStyle
                 }
+                allowFontScaling={false}
               >
                 {value
                   ? data.find((item) => item.value === value)?.label
@@ -161,6 +170,7 @@ const CustomDropdown = forwardRef(
               onChange={onChange}
               onFocus={onFocus}
               onBlur={onBlur}
+              dropdownPosition="bottom"
               placeholder={placeholder}
               placeholderStyle={styles.placeholderStyle}
               selectedTextStyle={styles.selectedTextStyle}
@@ -174,11 +184,11 @@ const CustomDropdown = forwardRef(
 
 const styles = StyleSheet.create({
   dropdown: {
+    height: Platform.OS === "android" ? 48 : 58,
     width: "100%",
     backgroundColor: COLORS["input-background"],
     paddingHorizontal: 16,
     borderRadius: 12,
-    height: 58,
     borderWidth: 1,
     borderColor: COLORS.border,
     flexDirection: "row",
@@ -205,7 +215,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS["input-background"],
     borderWidth: 1,
     borderColor: COLORS.border,
-    marginTop: 6,
+    marginTop: 4,
     overflow: "hidden",
   },
   listItemContainer: {

@@ -1,7 +1,14 @@
-// frontend/src/components/InputField.tsx
+//frontend/src/components/InputField.tsx
 
 import React, { forwardRef } from "react";
-import { View, Text, TextInput, TextInputProps } from "react-native";
+import {
+  View,
+  Text,
+  TextInput,
+  TextInputProps,
+  StyleSheet,
+  Platform,
+} from "react-native";
 import { COLORS } from "../styles/theme";
 
 interface InputFieldProps extends TextInputProps {
@@ -13,7 +20,10 @@ const InputField = forwardRef<TextInput, InputFieldProps>((props, ref) => {
 
   return (
     <View className="w-full mb-4">
-      <Text className="text-text-secondary font-semibold mb-2 ml-1 text-sm">
+      <Text
+        className="text-text-secondary font-semibold mb-2 ml-1 text-sm"
+        allowFontScaling={false}
+      >
         {label}
       </Text>
       <TextInput
@@ -21,12 +31,28 @@ const InputField = forwardRef<TextInput, InputFieldProps>((props, ref) => {
         accessible={true}
         accessibilityLabel={`Campo de texto para ${label}`}
         accessibilityHint={`Digite aqui a informação do campo ${label}`}
-        className="w-full bg-input-background p-4 rounded-xl text-sm text-text-primary"
+        style={[styles.textInput, styles.textInputWithNativeWind]}
         placeholderTextColor={COLORS.placeholder}
+        allowFontScaling={false}
         {...rest}
       />
     </View>
   );
+});
+
+const styles = StyleSheet.create({
+  textInput: {
+    height: Platform.OS === "android" ? 48 : 58,
+    textAlignVertical: "center",
+  },
+  textInputWithNativeWind: {
+    width: "100%",
+    backgroundColor: COLORS["input-background"],
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    fontSize: 14,
+    color: COLORS["text-primary"],
+  },
 });
 
 InputField.displayName = "InputField";

@@ -1,3 +1,5 @@
+//frontend/src/app/index.tsx
+
 import {
   View,
   TextInput,
@@ -5,6 +7,7 @@ import {
   Platform,
   ScrollView,
   Keyboard,
+  StyleSheet,
 } from "react-native";
 import { useSharedValue, withTiming } from "react-native-reanimated";
 import { router } from "expo-router";
@@ -14,7 +17,7 @@ import InputField from "../components/InputField";
 import CustomButton from "../components/CustomButton";
 import HeaderSection from "../components/HeaderSection";
 import CustomDropdown from "../components/CustomDropdown";
-import { SPACING } from "../styles/theme";
+import { COLORS, SPACING } from "../styles/theme";
 
 type UserType = "motorista" | "cliente" | null;
 
@@ -27,9 +30,6 @@ export default function Login() {
 
   const placaInputRef = useRef<TextInput>(null);
   const dropdownRef = useRef<{ open: () => void }>(null);
-  const [isKeyboardVisible, setKeyboardVisible] = useState(false);
-  const [openDropdownOnKeyboardHide, setOpenDropdownOnKeyboardHide] =
-    useState(false);
   const keyboardAnimation = useSharedValue(0);
 
   useEffect(() => {
@@ -39,24 +39,17 @@ export default function Login() {
       Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
 
     const showListener = Keyboard.addListener(showEvent, () => {
-      setKeyboardVisible(true);
       keyboardAnimation.value = withTiming(1, { duration: 250 });
     });
     const hideListener = Keyboard.addListener(hideEvent, () => {
-      setKeyboardVisible(false);
       keyboardAnimation.value = withTiming(0, { duration: 250 });
-
-      if (openDropdownOnKeyboardHide) {
-        dropdownRef.current?.open();
-        setOpenDropdownOnKeyboardHide(false);
-      }
     });
 
     return () => {
       hideListener.remove();
       showListener.remove();
     };
-  }, [openDropdownOnKeyboardHide]);
+  }, []);
 
   const userTypeData = [
     { label: "Motorista", value: "motorista" },
@@ -64,6 +57,7 @@ export default function Login() {
   ];
 
   const handleAccess = () => {
+    Keyboard.dismiss();
     if (userType === "motorista") {
       router.push("/map");
     } else if (userType === "cliente") {
@@ -72,6 +66,7 @@ export default function Login() {
   };
 
   const renderForm = () => {
+    // ... Nenhuma alteração aqui
     if (userType === "cliente") {
       return (
         <InputField
@@ -111,8 +106,7 @@ export default function Login() {
   };
 
   const handleDropdownPress = () => {
-    if (isKeyboardVisible) {
-      setOpenDropdownOnKeyboardHide(true);
+    if (Keyboard.isVisible()) {
       Keyboard.dismiss();
     } else {
       dropdownRef.current?.open();
@@ -120,33 +114,27 @@ export default function Login() {
   };
 
   return (
-    <SafeAreaView
-      className="flex-1 bg-background"
-      edges={["right", "left", "bottom"]}
-    >
-      <View className="flex-1">
-        <HeaderSection
-          name="seja bem vindo(a)!"
-          tips="Mais eficiência para quem entrega, mais tranquilidade para quem recebe."
-          keyboardAnimation={keyboardAnimation}
-        />
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          className="flex-1"
-        >
+    <SafeAreaView style={styles.container} edges={["right", "left", "bottom"]}>
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === "ios" ? "padding" : "padding"}
+      >
+        <View style={styles.container}>
+          <HeaderSection
+            name="seja bem vindo(a)!"
+            tips="Mais eficiência para quem entrega, mais tranquilidade para quem recebe."
+            keyboardAnimation={keyboardAnimation}
+          />
+
           <ScrollView
-            className="flex-1"
-            contentContainerStyle={{
-              flexGrow: 1,
-              justifyContent: "space-between",
-              padding: SPACING[6],
-            }}
+            style={{ flex: 1 }}
+            contentContainerStyle={styles.scrollContent}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
             scrollEnabled={!isDropdownOpen}
           >
             <View>
-              <View style={{ zIndex: isDropdownOpen ? 100 : 0 }}>
+              <View style={{ zIndex: 1 }}>
                 <CustomDropdown
                   ref={dropdownRef}
                   label="Motorista ou Cliente"
@@ -167,8 +155,20 @@ export default function Login() {
               disabled={!userType}
             />
           </ScrollView>
-        </KeyboardAvoidingView>
-      </View>
+        </View>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: "space-between",
+    padding: SPACING[6],
+  },
+});
