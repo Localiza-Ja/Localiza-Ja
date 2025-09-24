@@ -61,7 +61,7 @@ export default function Login() {
     if (userType === "motorista") {
       router.push("/map");
     } else if (userType === "cliente") {
-      alert(`Rastreando pedido: ${pedido}`);
+      router.push("/client");
     }
   };
 
