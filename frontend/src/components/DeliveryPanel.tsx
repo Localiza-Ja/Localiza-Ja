@@ -1,17 +1,16 @@
-// src/components/DeliveryPanel.tsx
-
 import React, { useMemo, useRef, useState } from 'react';
+import { StyleSheet } from 'react-native';
 import BottomSheet from '@gorhom/bottom-sheet';
-import DeliveriesList from './DeliveriesList'; // Ele vai usar o DeliveriesList
+import DeliveriesList from './DeliveriesList';
 import { Delivery } from '../types';
 
-// As informações que o painel precisa receber do mapa
 type DeliveryPanelProps = {
   deliveriesData: Delivery[];
   selectedDelivery: Delivery | null;
   onDeliveryPress: (delivery: Delivery) => void;
   onUpdateStatus: (deliveryId: number, newStatus: string) => void;
   onLogout: () => void;
+  onStartNavigation: () => void;
 };
 
 export default function DeliveryPanel({
@@ -20,16 +19,17 @@ export default function DeliveryPanel({
   onDeliveryPress,
   onUpdateStatus,
   onLogout,
+  onStartNavigation,
 }: DeliveryPanelProps) {
   const bottomSheetRef = useRef<BottomSheet>(null);
   const [activeSnapIndex, setActiveSnapIndex] = useState(1);
 
-  const snapPoints = useMemo(() => ["15%", "60%", "95%"], []);
+  // ALTERADO: Mudei o primeiro valor de "15%" para "10%"
+  const snapPoints = useMemo(() => ["10%", "60%", "95%"], []);
 
-  // Função interna para comandar o painel para o meio quando um item é clicado
   const handleItemClick = (delivery: Delivery) => {
-    onDeliveryPress(delivery); // Avisa o mapa para mover
-    bottomSheetRef.current?.snapToIndex(1); // Manda o painel para o meio
+    onDeliveryPress(delivery);
+    bottomSheetRef.current?.snapToIndex(1);
   };
 
   return (
@@ -39,16 +39,31 @@ export default function DeliveryPanel({
       snapPoints={snapPoints}
       onChange={(index) => setActiveSnapIndex(index)}
       handleIndicatorStyle={{ backgroundColor: '#010409ff', width: 50 }}
-      backgroundStyle={{ backgroundColor: 'white' }}
+      backgroundStyle={styles.bottomSheetBackground}
     >
       <DeliveriesList
         data={deliveriesData}
-        onDeliveryPress={handleItemClick} // Usa a função interna
+        onDeliveryPress={handleItemClick}
         onUpdateStatus={onUpdateStatus}
-        activeSnapIndex={activeSnapIndex}
-        selectedDelivery={selectedDelivery}
         onLogout={onLogout}
+        onStartNavigation={onStartNavigation}
       />
     </BottomSheet>
   );
 }
+
+const styles = StyleSheet.create({
+  bottomSheetBackground: {
+    backgroundColor: 'white',
+    borderTopLeftRadius: 40,
+    borderTopRightRadius: 40,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: -4,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 6.00,
+    elevation: 30,
+  }
+});

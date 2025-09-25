@@ -1,61 +1,163 @@
-// NAO ESTA SENDO USADO!
-
-import React from 'react';
-import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
-import Modal from 'react-native-modal';
+import React, { useState } from 'react';
+import { Modal, View, Text, TextInput, TouchableOpacity, Switch, Image, Alert, ScrollView } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 
+// ALTERADO: Adicionado 'observations' no tipo de retorno do onConfirm
 type ConfirmationModalProps = {
-  isVisible: boolean;
-  title: string;
-  message: string;
-  onCancel: () => void;
-  onConfirm: () => void;
-  confirmText?: string;
-  confirmButtonColor?: string;
+  visible: boolean;
+  onClose: () => void;
+  onConfirm: (details: { 
+    status: 'Finalizada' | 'Não realizada'; 
+    receiverName: string; 
+    reason: string; 
+    photoUri: string | null;
+    observations: string;
+  }) => void;
 };
 
-export default function ConfirmationModal({
-  isVisible,
-  title,
-  message,
-  onCancel,
-  onConfirm,
-  confirmText = "Confirmar",
-  confirmButtonColor = "bg-green-600",
-}: ConfirmationModalProps) {
+export default function ConfirmationModal({ visible, onClose, onConfirm }: ConfirmationModalProps) {
+  const [isSuccess, setIsSuccess] = useState(true);
+  const [receiverName, setReceiverName] = useState('');
+  const [reason, setReason] = useState('');
+  const [photo, setPhoto] = useState<string | null>(null);
+  const [observations, setObservations] = useState(''); // NOVO: Estado para as observações
+
+  const handleChoosePhoto = async () => {
+    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (permissionResult.granted === false) {
+      Alert.alert("Permissão necessária", "Você recusou o acesso à sua galeria de fotos!");
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.8,
+    });
+
+    if (!result.canceled) {
+      setPhoto(result.assets[0].uri);
+    }
+  };
+
+  const handleConfirm = () => {
+    // ALTERADO: Lógica de validação ajustada para as novas regras
+    if (isSuccess && !receiverName.trim()) {
+      Alert.alert('Campo obrigatório', 'O nome de quem recebeu é obrigatório para finalizar a entrega.');
+      return;
+    }
+    if (!isSuccess && !reason.trim()) {
+      Alert.alert('Campo obrigatório', 'O motivo é obrigatório quando a entrega não é realizada.');
+      return;
+    }
+    
+    onConfirm({
+      status: isSuccess ? 'Finalizada' : 'Não realizada',
+      receiverName,
+      reason: isSuccess ? '' : reason,
+      photoUri: photo,
+      observations: isSuccess ? observations : '', // NOVO: Enviando as observações
+    });
+    resetStateAndClose();
+  };
+
+  const resetStateAndClose = () => {
+    setIsSuccess(true);
+    setReceiverName('');
+    setReason('');
+    setPhoto(null);
+    setObservations(''); // NOVO: Limpando as observações
+    onClose();
+  };
+
   return (
     <Modal
-      isVisible={isVisible}
-      onBackdropPress={onCancel}
-      animationIn="fadeInUp"
-      animationOut="fadeOutDown"
-      backdropOpacity={0.4}
-      
-      style={{ justifyContent: 'center', margin: 20 }}>
-      <View className="bg-white rounded-2xl flex-shrink-1">
-        <View className="flex-row items-center p-5 border-b border-gray-200">
-          <Feather name="alert-triangle" size={24} color="#f97316" />
-          <Text className="text-xl font-bold text-gray-800 ml-3 flex-shrink-1">{title}</Text>
-        </View>
+      animationType="slide"
+      transparent={true}
+      visible={visible}
+      onRequestClose={resetStateAndClose}
+    >
+      <View className="flex-1 justify-center items-center bg-black/50 p-4">
+        <View className="w-full bg-white rounded-2xl p-6 shadow-lg max-h-[90%]">
+          <ScrollView showsVerticalScrollIndicator={false}> 
+            <Text className="text-xl font-bold mb-5 text-gray-800 text-center">
+              Finalizar Entrega
+            </Text>
 
-        <ScrollView className="flex-shrink-1" contentContainerStyle={{ padding: 20 }}>
-          <Text className="text-base text-gray-600">{message}</Text>
-        </ScrollView>
+            <View className="flex-row items-center justify-between w-full mb-4">
+              <Text className="text-base text-gray-700">Entrega realizada</Text>
+              <Switch
+                trackColor={{ false: "#d1d5db", true: "#60a5fa" }}
+                thumbColor={isSuccess ? "#2563eb" : "#f4f3f4"}
+                onValueChange={() => setIsSuccess(previousState => !previousState)}
+                value={isSuccess}
+              />
+            </View>
 
-        <View className="flex-row justify-end p-4 border-t border-gray-200">
-          <TouchableOpacity
-            onPress={onCancel}
-            className="py-3 px-5 rounded-lg mr-3"
-          >
-            <Text className="font-bold text-gray-600">Cancelar</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={onConfirm}
-            className={`py-3 px-5 rounded-lg shadow-md ${confirmButtonColor}`}
-          >
-            <Text className="font-bold text-white">{confirmText}</Text>
-          </TouchableOpacity>
+            {/* ALTERADO: Campo de nome agora sempre visível, com label dinâmico */}
+            <Text className="w-full text-left text-sm font-medium text-gray-700 mb-1 mt-3">
+              {isSuccess ? 'Nome de quem recebeu*' : 'Nome de quem recusou (Opcional)'}
+            </Text>
+            <TextInput
+              className="w-full h-12 border border-gray-300 rounded-lg px-4 text-base"
+              placeholder="Nome completo"
+              value={receiverName}
+              onChangeText={setReceiverName}
+            />
+            
+            {/* NOVO: Campo de observações, visível apenas se a entrega for um sucesso */}
+            {isSuccess && (
+              <>
+                <Text className="w-full text-left text-sm font-medium text-gray-700 mb-1 mt-3">Observações (Opcional)</Text>
+                <TextInput
+                  className="w-full h-20 border border-gray-300 rounded-lg px-4 pt-3 text-base"
+                  placeholder="Ex: Deixado na portaria, entregue ao vizinho..."
+                  value={observations}
+                  onChangeText={setObservations}
+                  multiline
+                  textAlignVertical="top"
+                />
+              </>
+            )}
+            
+            {!isSuccess && (
+              <>
+                <Text className="w-full text-left text-sm font-medium text-gray-700 mb-1 mt-3">Motivo da não entrega*</Text>
+                <TextInput
+                  className="w-full h-20 border border-gray-300 rounded-lg px-4 pt-3 text-base"
+                  placeholder="Ex: Cliente ausente, endereço não localizado..."
+                  value={reason}
+                  onChangeText={setReason}
+                  multiline
+                  textAlignVertical="top"
+                />
+              </>
+            )}
+
+            <Text className="w-full text-left text-sm font-medium text-gray-700 mb-1 mt-3">Adicionar Foto (Opcional)</Text>
+            <View className="flex-row w-full mt-1 items-center">
+              <TouchableOpacity className="w-20 h-20 rounded-lg border border-gray-300 justify-center items-center mr-4" onPress={handleChoosePhoto}>
+                {photo ? (
+                  <Image source={{ uri: photo }} className="w-full h-full rounded-lg" />
+                ) : (
+                  <Feather name="camera" size={32} color="#6b7280" />
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity className="flex-row items-center bg-gray-100 px-4 py-3 rounded-lg border border-gray-300" onPress={handleChoosePhoto}>
+                <Feather name="upload" size={18} color="#374151" />
+                <Text className="text-gray-800 ml-2 font-bold">Upload photo</Text>
+              </TouchableOpacity>
+            </View>
+            
+            <TouchableOpacity className="w-full bg-gray-800 py-3 rounded-lg mt-6" onPress={handleConfirm}>
+              <Text className="text-white text-center font-bold text-base">Confirmar</Text>
+            </TouchableOpacity>
+            <TouchableOpacity className="w-full bg-white py-3 rounded-lg mt-2 border border-gray-300" onPress={resetStateAndClose}>
+              <Text className="text-gray-800 text-center font-bold text-base">Cancelar</Text>
+            </TouchableOpacity>
+          </ScrollView>
         </View>
       </View>
     </Modal>
