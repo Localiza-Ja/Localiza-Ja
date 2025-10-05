@@ -92,24 +92,21 @@ export default function Login() {
 
   const BUTTON_SHIFT = 0;
 
-  // CORREÇÃO: Animação do botão estava com lógica invertida. Corrigido.
   const buttonAnimatedStyle = useAnimatedStyle(() => {
     const translateY = interpolate(
       keyboardAnimation.value,
-      [0, 1], // Teclado fechado (0) -> aberto (1)
-      [0, -BUTTON_SHIFT] // Botão sobe
+      [0, 1],
+      [0, -BUTTON_SHIFT]
     );
     return {
       transform: [{ translateY }],
     };
   });
 
-  // ✨ ANIMAÇÃO SIMPLIFICADA E CORRIGIDA ✨
   const welcomeAnimatedStyle = useAnimatedStyle(() => {
     let fontSize = 22;
     let opacity = 1;
     let marginBottom = 24;
-    // Usaremos lineHeight para encolher o texto verticalmente sem cortar
     let lineHeight: number | undefined = undefined;
     let height: number | undefined = undefined;
 
