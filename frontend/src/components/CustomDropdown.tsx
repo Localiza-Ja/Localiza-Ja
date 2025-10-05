@@ -219,7 +219,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   listItemContainer: {
-    paddingVertical: 17,
+    paddingVertical: Platform.OS === "android" ? 12 : 14,
     paddingHorizontal: 16,
     backgroundColor: COLORS["input-background"],
   },

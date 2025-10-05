@@ -3,7 +3,7 @@
 # dependencies
 node_modules/
 
-# Expo
+# Ignorar a pasta de cache e configurações locais do Expo
 .expo/
 dist/
 web-build/

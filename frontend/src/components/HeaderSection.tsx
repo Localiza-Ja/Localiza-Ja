@@ -1,3 +1,5 @@
+//frontend/src/components/HeaderSection.tsx
+
 import React from "react";
 // 1. Trocamos 'useWindowDimensions' por 'Dimensions'
 import { View, Text, Image, Dimensions } from "react-native";

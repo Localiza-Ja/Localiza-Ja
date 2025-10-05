@@ -1,7 +1,7 @@
-//frontend/src/app/index.tsx
-
+import React, { useState, useRef, useEffect } from "react";
 import {
   View,
+  Text,
   TextInput,
   KeyboardAvoidingView,
   Platform,
@@ -9,9 +9,16 @@ import {
   Keyboard,
   StyleSheet,
 } from "react-native";
-import { useSharedValue, withTiming } from "react-native-reanimated";
+
+import Animated, {
+  useSharedValue,
+  withTiming,
+  useAnimatedStyle,
+  interpolate,
+  Easing,
+} from "react-native-reanimated";
+
 import { router } from "expo-router";
-import { useState, useRef, useEffect } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import InputField from "../components/InputField";
 import CustomButton from "../components/CustomButton";
@@ -30,6 +37,7 @@ export default function Login() {
 
   const placaInputRef = useRef<TextInput>(null);
   const dropdownRef = useRef<{ open: () => void }>(null);
+
   const keyboardAnimation = useSharedValue(0);
 
   useEffect(() => {
@@ -39,10 +47,16 @@ export default function Login() {
       Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
 
     const showListener = Keyboard.addListener(showEvent, () => {
-      keyboardAnimation.value = withTiming(1, { duration: 250 });
+      keyboardAnimation.value = withTiming(1, {
+        duration: 400,
+        easing: Easing.out(Easing.exp),
+      });
     });
     const hideListener = Keyboard.addListener(hideEvent, () => {
-      keyboardAnimation.value = withTiming(0, { duration: 250 });
+      keyboardAnimation.value = withTiming(0, {
+        duration: 400,
+        easing: Easing.out(Easing.exp),
+      });
     });
 
     return () => {
@@ -65,46 +79,6 @@ export default function Login() {
     }
   };
 
-  const renderForm = () => {
-    // ... Nenhuma alteração aqui
-    if (userType === "cliente") {
-      return (
-        <InputField
-          label="Número do pedido"
-          placeholder="XXXXXXXXXXXX"
-          value={pedido}
-          onChangeText={setPedido}
-          keyboardType="numeric"
-        />
-      );
-    }
-    if (userType === "motorista") {
-      return (
-        <>
-          <InputField
-            label="CNH"
-            placeholder="XX-XXXXX-XXXX"
-            value={cnh}
-            onChangeText={setCnh}
-            returnKeyType="next"
-            onSubmitEditing={() => placaInputRef.current?.focus()}
-            blurOnSubmit={false}
-          />
-          <InputField
-            ref={placaInputRef}
-            label="PLACA VEÍCULO"
-            placeholder="ABC 1234"
-            value={placa}
-            onChangeText={setPlaca}
-            returnKeyType="done"
-            onSubmitEditing={handleAccess}
-          />
-        </>
-      );
-    }
-    return null;
-  };
-
   const handleDropdownPress = () => {
     if (Keyboard.isVisible()) {
       Keyboard.dismiss();
@@ -113,48 +87,151 @@ export default function Login() {
     }
   };
 
+  const clienteHelperText =
+    "Em caso de dúvida consulte número do pedido na Nota Fiscal ou entre em contato com o atendimento ao cliente.";
+
+  const BUTTON_SHIFT = 0;
+
+  // CORREÇÃO: Animação do botão estava com lógica invertida. Corrigido.
+  const buttonAnimatedStyle = useAnimatedStyle(() => {
+    const translateY = interpolate(
+      keyboardAnimation.value,
+      [0, 1], // Teclado fechado (0) -> aberto (1)
+      [0, -BUTTON_SHIFT] // Botão sobe
+    );
+    return {
+      transform: [{ translateY }],
+    };
+  });
+
+  // ✨ ANIMAÇÃO SIMPLIFICADA E CORRIGIDA ✨
+  const welcomeAnimatedStyle = useAnimatedStyle(() => {
+    let fontSize = 22;
+    let opacity = 1;
+    let marginBottom = 24;
+    // Usaremos lineHeight para encolher o texto verticalmente sem cortar
+    let lineHeight: number | undefined = undefined;
+
+    const initialFontSize = Platform.OS === "ios" ? 23 : 21;
+
+    switch (userType) {
+      case "motorista":
+        opacity = interpolate(keyboardAnimation.value, [0, 1], [1, 0]);
+        lineHeight = interpolate(
+          keyboardAnimation.value,
+          [0, 1],
+          [initialFontSize * 1.2, 0]
+        );
+        marginBottom = interpolate(keyboardAnimation.value, [0, 1], [8, 0]);
+        fontSize = initialFontSize;
+        break;
+
+      case "cliente":
+        fontSize = interpolate(
+          keyboardAnimation.value,
+          [0, 1],
+          [initialFontSize, 18]
+        );
+        marginBottom = interpolate(keyboardAnimation.value, [0, 1], [16, 8]);
+        break;
+
+      default:
+        fontSize = interpolate(
+          keyboardAnimation.value,
+          [0, 1],
+          [initialFontSize, 20]
+        );
+        marginBottom = 15;
+        break;
+    }
+
+    return {
+      opacity,
+      fontSize,
+      marginBottom,
+      lineHeight,
+    };
+  });
+
   return (
     <SafeAreaView style={styles.container} edges={["right", "left", "bottom"]}>
       <KeyboardAvoidingView
-        style={styles.container}
-        behavior={Platform.OS === "ios" ? "padding" : "padding"}
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
-        <View style={styles.container}>
-          <HeaderSection
-            name="seja bem vindo(a)!"
-            tips="Mais eficiência para quem entrega, mais tranquilidade para quem recebe."
-            keyboardAnimation={keyboardAnimation}
-          />
+        <HeaderSection
+          name="seja bem vindo(a)!"
+          tips="Mais eficiência para quem entrega, mais tranquilidade para quem recebe."
+          keyboardAnimation={keyboardAnimation}
+        />
 
+        <View style={{ flex: 1 }}>
           <ScrollView
-            style={{ flex: 1 }}
             contentContainerStyle={styles.scrollContent}
             keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
             scrollEnabled={!isDropdownOpen}
           >
             <View>
-              <View style={{ zIndex: 1 }}>
-                <CustomDropdown
-                  ref={dropdownRef}
-                  label="Motorista ou Cliente"
-                  placeholder="Clique aqui"
-                  data={userTypeData}
-                  value={userType}
-                  onChange={(item) => setUserType(item.value as UserType)}
-                  onFocus={() => setIsDropdownOpen(true)}
-                  onBlur={() => setIsDropdownOpen(false)}
-                  onPress={handleDropdownPress}
-                />
-              </View>
-              {renderForm()}
+              <Animated.Text style={[styles.welcomeText, welcomeAnimatedStyle]}>
+                Seja bem vindo(a)!
+              </Animated.Text>
+
+              <CustomDropdown
+                ref={dropdownRef}
+                label="Motorista ou Cliente"
+                placeholder="Selecione abaixo"
+                data={userTypeData}
+                value={userType}
+                onChange={(item) => setUserType(item.value as UserType)}
+                onFocus={() => setIsDropdownOpen(true)}
+                onBlur={() => setIsDropdownOpen(false)}
+                onPress={handleDropdownPress}
+              />
+
+              {userType === "cliente" && (
+                <>
+                  <InputField
+                    label="Número do pedido"
+                    placeholder="XXXXXXXXXXXX"
+                    value={pedido}
+                    onChangeText={setPedido}
+                    keyboardType="numeric"
+                  />
+                  <Text style={styles.helperText}>{clienteHelperText}</Text>
+                </>
+              )}
+
+              {userType === "motorista" && (
+                <>
+                  <InputField
+                    label="CNH"
+                    placeholder="XX-XXXXX-XXXX"
+                    value={cnh}
+                    onChangeText={setCnh}
+                    returnKeyType="next"
+                    onSubmitEditing={() => placaInputRef.current?.focus()}
+                    blurOnSubmit={false}
+                  />
+                  <InputField
+                    ref={placaInputRef}
+                    label="PLACA VEÍCULO"
+                    placeholder="ABC 1234"
+                    value={placa}
+                    onChangeText={setPlaca}
+                    returnKeyType="done"
+                    onSubmitEditing={handleAccess}
+                  />
+                </>
+              )}
             </View>
+          </ScrollView>
+          <Animated.View style={[styles.buttonWrapper, buttonAnimatedStyle]}>
             <CustomButton
               title={userType === "cliente" ? "Rastrear" : "Acessar"}
               onPress={handleAccess}
               disabled={!userType}
             />
-          </ScrollView>
+          </Animated.View>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -167,8 +244,27 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
   },
   scrollContent: {
-    flexGrow: 1,
-    justifyContent: "space-between",
     padding: SPACING[6],
+    paddingBottom: 0,
+  },
+  buttonWrapper: {
+    width: "100%",
+    paddingBottom: 8,
+    paddingHorizontal: 25,
+    backgroundColor: COLORS.background,
+  },
+  welcomeText: {
+    fontWeight: "bold",
+    color: COLORS["text-primary"],
+    textAlign: "left",
+  },
+  helperText: {
+    marginTop: 8,
+    marginBottom: 16,
+    fontSize: 13,
+    color: COLORS["text-secondary"],
+    textAlign: "center",
+    alignSelf: "center",
+    width: "90%",
   },
 });
