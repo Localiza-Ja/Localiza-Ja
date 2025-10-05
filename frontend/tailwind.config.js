@@ -51,6 +51,10 @@ module.exports = {
         xl: "12px",
         "4xl": "40px",
       },
+      fontFamily: {
+        regular: ["GoogleSansCode-Regular"],
+        slogan: ["GoogleSansCode-Italic"],
+      },
     },
   },
   plugins: [],

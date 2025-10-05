@@ -128,7 +128,6 @@ export default function Login() {
           [initialFontSize * 1.2, 0]
         );
         break;
-
       case "cliente":
         fontSize = interpolate(
           keyboardAnimation.value,
@@ -137,7 +136,6 @@ export default function Login() {
         );
         marginBottom = interpolate(keyboardAnimation.value, [0, 1], [16, 8]);
         break;
-
       default:
         fontSize = interpolate(
           keyboardAnimation.value,
@@ -164,7 +162,7 @@ export default function Login() {
         behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
         <HeaderSection
-          name="seja bem vindo(a)!"
+          title="seja bem vindo(a)!"
           tips="Mais eficiência para quem entrega, mais tranquilidade para quem recebe."
           keyboardAnimation={keyboardAnimation}
         />
@@ -179,7 +177,6 @@ export default function Login() {
               <Animated.Text style={[styles.welcomeText, welcomeAnimatedStyle]}>
                 Seja bem vindo(a)!
               </Animated.Text>
-
               <CustomDropdown
                 ref={dropdownRef}
                 label="Motorista ou Cliente"
@@ -191,7 +188,6 @@ export default function Login() {
                 onBlur={() => setIsDropdownOpen(false)}
                 onPress={handleDropdownPress}
               />
-
               {userType === "cliente" && (
                 <>
                   <InputField
@@ -210,7 +206,6 @@ export default function Login() {
                   </Text>
                 </>
               )}
-
               {userType === "motorista" && (
                 <>
                   <InputField
