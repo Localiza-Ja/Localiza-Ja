@@ -111,6 +111,7 @@ export default function Login() {
     let marginBottom = 24;
     // Usaremos lineHeight para encolher o texto verticalmente sem cortar
     let lineHeight: number | undefined = undefined;
+    let height: number | undefined = undefined;
 
     const initialFontSize = Platform.OS === "ios" ? 23 : 21;
 
@@ -124,6 +125,11 @@ export default function Login() {
         );
         marginBottom = interpolate(keyboardAnimation.value, [0, 1], [8, 0]);
         fontSize = initialFontSize;
+        height = interpolate(
+          keyboardAnimation.value,
+          [0, 1],
+          [initialFontSize * 1.2, 0]
+        );
         break;
 
       case "cliente":
@@ -150,6 +156,7 @@ export default function Login() {
       fontSize,
       marginBottom,
       lineHeight,
+      height,
     };
   });
 
@@ -197,7 +204,13 @@ export default function Login() {
                     onChangeText={setPedido}
                     keyboardType="numeric"
                   />
-                  <Text style={styles.helperText}>{clienteHelperText}</Text>
+                  <Text
+                    style={styles.helperText}
+                    numberOfLines={2}
+                    adjustsFontSizeToFit={true}
+                  >
+                    {clienteHelperText}
+                  </Text>
                 </>
               )}
 
@@ -259,9 +272,9 @@ const styles = StyleSheet.create({
     textAlign: "left",
   },
   helperText: {
-    marginTop: 8,
+    marginTop: 16,
     marginBottom: 16,
-    fontSize: 13,
+    fontSize: 30,
     color: COLORS["text-secondary"],
     textAlign: "center",
     alignSelf: "center",

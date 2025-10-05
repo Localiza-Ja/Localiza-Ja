@@ -42,7 +42,7 @@ const InputField = forwardRef<TextInput, InputFieldProps>((props, ref) => {
 
 const styles = StyleSheet.create({
   textInput: {
-    height: Platform.OS === "android" ? 48 : 58,
+    height: Platform.OS === "android" ? 45 : 50,
     textAlignVertical: "center",
   },
   textInputWithNativeWind: {

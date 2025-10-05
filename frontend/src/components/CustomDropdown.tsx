@@ -107,7 +107,6 @@ const CustomDropdown = forwardRef(
           style={[
             styles.listItemContainer,
             isEven ? null : styles.listItemContainerOdd,
-            isSelected && styles.selectedListItemContainer,
           ]}
         >
           <Text
@@ -123,8 +122,10 @@ const CustomDropdown = forwardRef(
       );
     };
 
+    const ANDROID_DROPDOWN_OFFSET = -5; 
+
     return (
-      <View className="w-full mb-4">
+      <View className="w-full mb-3">
         <Text
           className="text-text-secondary font-semibold mb-2 ml-1 text-sm"
           allowFontScaling={false}
@@ -160,7 +161,15 @@ const CustomDropdown = forwardRef(
             <Dropdown
               ref={dropdownRef}
               style={styles.realDropdownStyle}
-              containerStyle={[styles.containerStyle, styles.shadow]}
+              // ✨ AJUSTE APLICADO AQUI ✨
+              containerStyle={[
+                styles.containerStyle,
+                styles.shadow,
+                // Remove a margem superior apenas no Android
+                Platform.OS === "android" && {
+                  marginTop: ANDROID_DROPDOWN_OFFSET,
+                },
+              ]}
               renderItem={renderDropdownItem}
               data={data}
               maxHeight={200}
@@ -215,7 +224,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS["input-background"],
     borderWidth: 1,
     borderColor: COLORS.border,
-    marginTop: 4,
+    marginTop: 4, // Este é o valor padrão que estamos sobrescrevendo no Android
     overflow: "hidden",
   },
   listItemContainer: {
@@ -225,9 +234,6 @@ const styles = StyleSheet.create({
   },
   listItemContainerOdd: { backgroundColor: COLORS.gray?.[200] || "#F8F9FA" },
   listItemText: { color: COLORS["text-primary"], fontSize: 14 },
-  selectedListItemContainer: {
-    backgroundColor: COLORS["ui-border"] || "#E9ECEF",
-  },
   selectedListItemText: {
     color: COLORS.primary,
     fontWeight: "bold",
