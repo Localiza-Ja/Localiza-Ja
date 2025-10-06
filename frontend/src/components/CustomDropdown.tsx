@@ -161,11 +161,9 @@ const CustomDropdown = forwardRef(
             <Dropdown
               ref={dropdownRef}
               style={styles.realDropdownStyle}
-              // ✨ AJUSTE APLICADO AQUI ✨
               containerStyle={[
                 styles.containerStyle,
                 styles.shadow,
-                // Remove a margem superior apenas no Android
                 Platform.OS === "android" && {
                   marginTop: ANDROID_DROPDOWN_OFFSET,
                 },
@@ -224,7 +222,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS["input-background"],
     borderWidth: 1,
     borderColor: COLORS.border,
-    marginTop: 4, // Este é o valor padrão que estamos sobrescrevendo no Android
+    marginTop: 4,
     overflow: "hidden",
   },
   listItemContainer: {

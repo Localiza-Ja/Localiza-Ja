@@ -1,5 +1,6 @@
-import React from "react";
-// Importe o StyleSheet para as mudanças
+// frontend/src/components/HeaderSection.tsx
+
+import React, { useRef, useEffect } from "react";
 import {
   View,
   Text,
@@ -16,6 +17,10 @@ import Animated, {
 import { LinearGradient } from "expo-linear-gradient";
 import { COLORS } from "../styles/theme";
 import { scale, verticalScale } from "react-native-size-matters";
+import LottieView from "lottie-react-native";
+
+const START_FRAME = 0;
+const END_FRAME = 26;
 
 const AnimatedLinearGradient = Animated.createAnimatedComponent(LinearGradient);
 const { height: screenHeight } = Dimensions.get("window");
@@ -26,11 +31,13 @@ interface HeaderSectionProps {
   keyboardAnimation: SharedValue<number>;
 }
 
-const HeaderSection = ({
-  title,
-  tips,
-  keyboardAnimation,
-}: HeaderSectionProps) => {
+const HeaderSection = ({ tips, keyboardAnimation }: HeaderSectionProps) => {
+  const animationRef = useRef<LottieView>(null);
+
+  useEffect(() => {
+    animationRef.current?.play(START_FRAME, END_FRAME);
+  }, []);
+
   const animatedContainerStyle = useAnimatedStyle(() => {
     const height = interpolate(
       keyboardAnimation.value,
@@ -75,9 +82,11 @@ const HeaderSection = ({
           <Text style={styles.tipsText} className="font-slogan">
             {tips}
           </Text>
-          <Image
-            source={require("../../assets/images/truck001.png")}
-            style={styles.truckImage}
+          <LottieView
+            ref={animationRef}
+            source={require("../../assets/animations/logo-animation.json")}
+            style={styles.truckAnimation}
+            loop
           />
         </View>
       </Animated.View>
@@ -93,6 +102,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 24,
     paddingBottom: 50,
+    overflow: "hidden",
   },
   absoluteFill: {
     position: "absolute",
@@ -136,10 +146,10 @@ const styles = StyleSheet.create({
     color: COLORS["text-primary"],
     width: "70%",
   },
-  truckImage: {
-    width: scale(100),
+  truckAnimation: {
+    width: scale(80),
     height: verticalScale(60),
-    resizeMode: "contain",
+    transform: [{ scale: 4 }, { translateY: verticalScale(5) }],
   },
 });
 
