@@ -1,7 +1,7 @@
 """
 Módulo: routes.py
 Descrição: Define os endpoints da API para gerenciamento de sensores e verificação de conectividade.
-Autor:Kaua Hipolito Rodrigues
+Autor: Kaua Hipolito Rodrigues
 Data: 06/10/2025
 """
 
@@ -34,10 +34,6 @@ class Ping(Resource):
             return {
                 "message": f"Erro interno no servidor: {str(e)}"
             }, 500
-
-# ==========================================
-# USUARIO
-# ==========================================
 
 class UsuarioResource(Resource):
     parser = reqparse.RequestParser()
@@ -161,11 +157,6 @@ def init_routes(api):
     api.add_resource(Sensor_rote, "/sensores", "/sensores/<string:sensor_id>")
     api.add_resource(UsuarioResource, "/usuarios", "/usuarios/<string:usuario_id>")
 
-
-# ==========================================
-# ENTREGA
-# ==========================================
-
 class EntregaResource(Resource):
     parser = reqparse.RequestParser()
     parser.add_argument("motorista_id", type=str, required=True, help="ID do motorista é obrigatório")
@@ -273,11 +264,6 @@ class EntregaResource(Resource):
         except Exception as e:
             db.session.rollback()
             return {"message": f"Erro interno no servidor: {str(e)}"}, 500
-
-
-# ==========================================
-# LOCALIZAÇÃO
-# ==========================================
 
 class LocalizacaoResource(Resource):
     parser = reqparse.RequestParser()
