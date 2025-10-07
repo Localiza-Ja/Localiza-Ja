@@ -1,31 +1,87 @@
-// ARQUIVO: frontend/src/components/CustomButton.tsx (com disabled)
+// ====================================================================================
+// ARQUIVO: CustomButton.tsx
+// OBJETIVO: Componente de botão reutilizável padrão do aplicativo. Utiliza
+//           TouchableOpacity para um feedback de opacidade ao ser pressionado.
+// ====================================================================================
+
 import React from "react";
-import { Text, TouchableOpacity } from "react-native";
+import { Text, TouchableOpacity, StyleSheet, Platform } from "react-native";
+import { COLORS, SPACING } from "../styles/theme";
+
+// ====================================================================================
+// INTERFACE DE PROPRIEDADES (PROPS)
+// ====================================================================================
 
 interface ButtonProps {
+  // O texto exibido no botão.
   title: string;
+  // A função a ser executada quando o botão é pressionado.
   onPress: () => void;
-  disabled?: boolean; // Adicionamos a prop opcional
+  // Se `true`, o botão fica visualmente desabilitado e não pode ser pressionado.
+  disabled?: boolean;
 }
 
+// ====================================================================================
+// COMPONENTE PRINCIPAL
+// ====================================================================================
+
 const CustomButton = ({ title, onPress, disabled }: ButtonProps) => (
+  // TouchableOpacity é um componente simples que dá um feedback de opacidade ao ser tocado.
   <TouchableOpacity
-    // Aplicamos estilos diferentes quando está desabilitado
-    className={`
-      w-full p-4 rounded-full shadow-md
-      ${disabled ? "bg-gray-400" : "bg-text-primary active:opacity-80"}
-    `}
+    style={[
+      styles.button,
+      disabled ? styles.buttonDisabled : styles.buttonEnabled,
+    ]}
     onPress={onPress}
-    disabled={disabled} // Passamos a prop para o componente
+    disabled={disabled}
     accessible={true}
     accessibilityLabel={title}
     accessibilityHint={`Toque para ${title}`}
     accessibilityRole="button"
+    activeOpacity={0.8}
   >
-    <Text className="text-background text-center text-base font-bold">
+    <Text style={styles.text} allowFontScaling={false}>
       {title}
     </Text>
   </TouchableOpacity>
 );
+
+// ====================================================================================
+// ESTILOS (com StyleSheet)
+// ====================================================================================
+
+const styles = StyleSheet.create({
+  // Estilo base do botão, com tamanho, bordas e sombras.
+  button: {
+    height: Platform.OS === "android" ? 48 : 58,
+    width: "100%",
+    borderRadius: 9999,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: SPACING[4],
+    // Sombra para iOS
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.5,
+    shadowRadius: 4,
+    // Sombra para Android
+    elevation: 5,
+  },
+  // Estilo para o botão quando está habilitado (fundo escuro).
+  buttonEnabled: {
+    backgroundColor: COLORS["text-primary"],
+  },
+  // Estilo para o botão quando está desabilitado (fundo cinza).
+  buttonDisabled: {
+    backgroundColor: COLORS.gray[600],
+  },
+  // Estilo para o texto do botão.
+  text: {
+    color: COLORS.background,
+    textAlign: "center",
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+});
 
 export default CustomButton;

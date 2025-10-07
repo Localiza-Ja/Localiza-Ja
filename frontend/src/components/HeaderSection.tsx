@@ -1,97 +1,213 @@
-// ARQUIVO: frontend/src/components/HeaderSection.tsx (Versão Final Ajustada)
+// ====================================================================================
+// ARQUIVO: HeaderSection.tsx
+// OBJETIVO: Exibir o cabeçalho principal da tela de login, que se anima
+//           quando o teclado aparece.
+// ====================================================================================
 
-import React from "react";
-import { View, Text, Image, useWindowDimensions } from "react-native";
+import React, { useRef, useEffect } from "react";
+import {
+  View,
+  Text,
+  Image,
+  Dimensions,
+  StyleSheet,
+  Platform,
+} from "react-native";
 import Animated, {
   useAnimatedStyle,
   SharedValue,
   interpolate,
 } from "react-native-reanimated";
 import { LinearGradient } from "expo-linear-gradient";
-import { COLORS } from "../styles/theme";
+import LottieView from "lottie-react-native";
 import { scale, verticalScale } from "react-native-size-matters";
 
-// Criamos uma versão animável do LinearGradient
+import { COLORS } from "../styles/theme";
+
+// ====================================================================================
+// CONSTANTES
+// ====================================================================================
+
+// Componente para permitir animações no LinearGradient
 const AnimatedLinearGradient = Animated.createAnimatedComponent(LinearGradient);
 
+// Pega a altura total da tela do dispositivo uma única vez para otimização
+const { height: screenHeight } = Dimensions.get("window");
+
+// Define o segmento da animação Lottie que deve tocar em loop
+const LOTTIE_START_FRAME = 0;
+const LOTTIE_END_FRAME = 28;
+
+// ====================================================================================
+// INTERFACE DE PROPRIEDADES (PROPS)
+// ====================================================================================
+
 interface HeaderSectionProps {
-  name: string; // Será o título principal (ex: "Localiza Já" ou "Seja bem vindo(a)!")
-  tips: string; // Será o subtítulo
+  // O texto do slogan exibido na parte de baixo do header
+  tips: string;
+  // Valor compartilhado (da tela Login) que controla a animação do teclado (0 a 1)
   keyboardAnimation: SharedValue<number>;
 }
 
-const HeaderSection = ({
-  name,
-  tips,
-  keyboardAnimation,
-}: HeaderSectionProps) => {
-  const { height: screenHeight } = useWindowDimensions();
+// ====================================================================================
+// COMPONENTE PRINCIPAL
+// ====================================================================================
 
-  // --- ANIMAÇÃO DA ALTURA DO CONTAINER ---
+const HeaderSection = ({ tips, keyboardAnimation }: HeaderSectionProps) => {
+  // ----------------------------------------------------------------------------------
+  // HOOKS
+  // ----------------------------------------------------------------------------------
+
+  // Cria uma referência para o componente LottieView para podermos controlá-lo (ex: dar play)
+  const animationRef = useRef<LottieView>(null);
+
+  // useEffect que executa uma ação quando o componente é montado.
+  // Neste caso, ele dá o "play" na animação Lottie.
+  useEffect(() => {
+    animationRef.current?.play(LOTTIE_START_FRAME, LOTTIE_END_FRAME);
+  }, []);
+
+  // ----------------------------------------------------------------------------------
+  // ANIMAÇÕES (com react-native-reanimated)
+  // ----------------------------------------------------------------------------------
+
+  // Animação para a altura do container principal do header
   const animatedContainerStyle = useAnimatedStyle(() => {
-    // A altura do header varia entre 40% e 12% da tela
     const height = interpolate(
       keyboardAnimation.value,
-      [0, 1], // De teclado escondido (0) para visível (1)
-      [screenHeight * 0.4, screenHeight * 0.12] // Altura vai de 40% para 12%
+      [0, 1], // De (teclado fechado) para (teclado aberto)
+      [screenHeight * 0.4, screenHeight * 0.14] // A altura varia de 40% para 14% da tela
     );
     return { height };
   });
 
-  // --- ANIMAÇÃO DO CONTEÚDO PRINCIPAL (TUDO EXCETO O LOGO PEQUENO) ---
+  // Animação para a opacidade do conteúdo principal (some quando o teclado abre)
   const mainContentStyle = useAnimatedStyle(() => {
-    // A opacidade desaparece na primeira metade da animação do teclado
-    const opacity = interpolate(keyboardAnimation.value, [0, 0.5], [1, 0]);
+    const opacity = interpolate(
+      keyboardAnimation.value,
+      [0, 0.5], // A opacidade vai de 1 a 0 na primeira metade da animação do teclado
+      [1, 0]
+    );
     return { opacity };
   });
 
-  // --- ANIMAÇÃO DO LOGO PEQUENO (QUANDO O TECLADO ESTÁ ABERTO) ---
+  // Animação para a opacidade do logo pequeno (aparece quando o teclado abre)
   const smallLogoStyle = useAnimatedStyle(() => {
-    // A opacidade aparece na segunda metade da animação
-    const opacity = interpolate(keyboardAnimation.value, [0.5, 1], [0, 1]);
+    const opacity = interpolate(
+      keyboardAnimation.value,
+      [0.5, 1], // A opacidade vai de 0 a 1 na segunda metade da animação do teclado
+      [0, 1]
+    );
     return { opacity };
   });
+
+  // ----------------------------------------------------------------------------------
+  // RENDERIZAÇÃO DO COMPONENTE (JSX)
+  // ----------------------------------------------------------------------------------
 
   return (
     <AnimatedLinearGradient
-      colors={[COLORS.primary, COLORS["gradient-end"]]} // Suas cores do tema
-      className="w-full rounded-b-4xl justify-center items-center p-6"
-      style={animatedContainerStyle} // Aplica a altura animada
+      colors={[COLORS.primary, COLORS["gradient-end"]]}
+      style={[styles.gradientContainer, animatedContainerStyle]}
     >
-      {/* Conteúdo que só aparece quando o teclado está ABERTO */}
+      {/* View para o logo pequeno (visível com o teclado aberto) */}
       <Animated.View
-        className="absolute top-0 left-0 w-full h-full justify-center items-center"
-        style={smallLogoStyle}
+        style={[styles.absoluteFill, styles.centerContent, smallLogoStyle]}
       >
-        <Animated.Image
-          source={require("../../assets/images/logo001.png")} // Logo principal
-          style={{
-            width: scale(200),
-            height: verticalScale(60),
-            resizeMode: "contain",
-          }}
+        <Image
+          source={require("../../assets/images/logo001.png")}
+          style={styles.smallLogo}
         />
       </Animated.View>
 
-      {/* Conteúdo que só aparece quando o teclado está FECHADO */}
-      <Animated.View
-        className="w-full h-full items-center"
-        style={mainContentStyle}
-      >
-        <Text className="text-5xl font-bold text-text-primary mt-12">
-          {name}
-        </Text>
-        <Text className="text-base text-text-primary text-center mt-2">
-          {tips}
-        </Text>
-        <Image
-          source={require("../../assets/images/truck001.png")} // Caminhão isométrico
-          className="w-40 h-20 mt-4"
-          resizeMode="contain"
-        />
+      {/* View para o conteúdo principal (visível com o teclado fechado) */}
+      <Animated.View style={[styles.mainContentContainer, mainContentStyle]}>
+        {/* Seção de Cima: Logo Principal */}
+        <View style={styles.topSection}>
+          <Image
+            source={require("../../assets/images/logo001.png")}
+            style={styles.largeLogo}
+          />
+        </View>
+
+        {/* Seção de Baixo: Slogan e Animação do Caminhão */}
+        <View style={styles.bottomSection}>
+          <Text style={styles.tipsText} className="font-slogan">
+            {tips}
+          </Text>
+          <LottieView
+            ref={animationRef}
+            source={require("../../assets/animations/logo-animation.json")}
+            style={styles.truckAnimation}
+            loop
+          />
+        </View>
       </Animated.View>
     </AnimatedLinearGradient>
   );
 };
+
+// ====================================================================================
+// ESTILOS (com StyleSheet)
+// ====================================================================================
+
+const styles = StyleSheet.create({
+  gradientContainer: {
+    width: "100%",
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    paddingBottom: 50,
+    overflow: "hidden", // Garante que a animação não "vaze" para fora no Android
+  },
+  absoluteFill: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  centerContent: {
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  smallLogo: {
+    width: scale(190),
+    height: verticalScale(40),
+    resizeMode: "contain",
+  },
+  mainContentContainer: {
+    flex: 1,
+    justifyContent: "space-between", // Empurra o logo para cima e a seção de baixo para baixo
+  },
+  topSection: {
+    alignItems: "center",
+  },
+  largeLogo: {
+    width: scale(260),
+    height: verticalScale(100),
+    resizeMode: "contain",
+    marginTop: verticalScale(16),
+  },
+  bottomSection: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-end",
+  },
+  tipsText: {
+    fontSize: Platform.select({
+      ios: 14,
+      android: 11,
+    }),
+    color: COLORS["text-primary"],
+    width: "70%",
+  },
+  truckAnimation: {
+    width: scale(80),
+    height: verticalScale(60),
+    transform: [{ scale: 4 }, { translateY: verticalScale(5) }],
+  },
+});
 
 export default HeaderSection;

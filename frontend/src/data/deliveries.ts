@@ -1,11 +1,11 @@
-import { Delivery } from '../types';
+import { Delivery } from "../types";
 
 export const deliveries: Delivery[] = [
   {
     id: 1,
     client: "Hortifruti S.A.",
-    addressStreet: "Rua Alvare Padilha, 257", 
-    addressCity: "Jardim Primavera, Campinas/SP", 
+    addressStreet: "Rua Alvare Padilha, 257",
+    addressCity: "Jardim Primavera, Campinas/SP",
     phone: "(19) 91234-5678",
     obs: "Ao lado do Campo de Futebol",
     orderNumber: "49547-2",
@@ -16,8 +16,8 @@ export const deliveries: Delivery[] = [
   {
     id: 2,
     client: "Metalúrgica Forte Mais",
-    addressStreet: "Avenida da Indústria, 1200", 
-    addressCity: "Distrito Industrial, Campinas/SP", 
+    addressStreet: "Avenida da Indústria, 1200",
+    addressCity: "Distrito Industrial, Campinas/SP",
     phone: "(19) 98765-4321",
     obs: "Portão azul",
     orderNumber: "49548-1",
@@ -28,12 +28,12 @@ export const deliveries: Delivery[] = [
   {
     id: 3,
     client: "Supermercado LeveMais",
-    addressStreet: "Rua Sete de Setembro, 500", 
-    addressCity: "Centro, Sumaré/SP", 
+    addressStreet: "Rua Sete de Setembro, 500",
+    addressCity: "Centro, Sumaré/SP",
     phone: "(19) 99999-8888",
     obs: "Entregar no depósito dos fundos",
     orderNumber: "49549-0",
-    status: "Pendente",
+    status: "Entrega Não Iniciada",
     latitude: -22.8219,
     longitude: -47.2667,
   },
