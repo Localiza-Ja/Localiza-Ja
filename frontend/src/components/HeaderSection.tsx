@@ -1,4 +1,8 @@
-// frontend/src/components/HeaderSection.tsx
+// ====================================================================================
+// ARQUIVO: HeaderSection.tsx
+// OBJETIVO: Exibir o cabeçalho principal da tela de login, que se anima
+//           quando o teclado aparece.
+// ====================================================================================
 
 import React, { useRef, useEffect } from "react";
 import {
@@ -15,53 +19,98 @@ import Animated, {
   interpolate,
 } from "react-native-reanimated";
 import { LinearGradient } from "expo-linear-gradient";
-import { COLORS } from "../styles/theme";
-import { scale, verticalScale } from "react-native-size-matters";
 import LottieView from "lottie-react-native";
+import { scale, verticalScale } from "react-native-size-matters";
 
-const START_FRAME = 0;
-const END_FRAME = 26;
+import { COLORS } from "../styles/theme";
 
+// ====================================================================================
+// CONSTANTES
+// ====================================================================================
+
+// Componente para permitir animações no LinearGradient
 const AnimatedLinearGradient = Animated.createAnimatedComponent(LinearGradient);
+
+// Pega a altura total da tela do dispositivo uma única vez para otimização
 const { height: screenHeight } = Dimensions.get("window");
 
+// Define o segmento da animação Lottie que deve tocar em loop
+const LOTTIE_START_FRAME = 0;
+const LOTTIE_END_FRAME = 28;
+
+// ====================================================================================
+// INTERFACE DE PROPRIEDADES (PROPS)
+// ====================================================================================
+
 interface HeaderSectionProps {
-  title: string;
+  // O texto do slogan exibido na parte de baixo do header
   tips: string;
+  // Valor compartilhado (da tela Login) que controla a animação do teclado (0 a 1)
   keyboardAnimation: SharedValue<number>;
 }
 
+// ====================================================================================
+// COMPONENTE PRINCIPAL
+// ====================================================================================
+
 const HeaderSection = ({ tips, keyboardAnimation }: HeaderSectionProps) => {
+  // ----------------------------------------------------------------------------------
+  // HOOKS
+  // ----------------------------------------------------------------------------------
+
+  // Cria uma referência para o componente LottieView para podermos controlá-lo (ex: dar play)
   const animationRef = useRef<LottieView>(null);
 
+  // useEffect que executa uma ação quando o componente é montado.
+  // Neste caso, ele dá o "play" na animação Lottie.
   useEffect(() => {
-    animationRef.current?.play(START_FRAME, END_FRAME);
+    animationRef.current?.play(LOTTIE_START_FRAME, LOTTIE_END_FRAME);
   }, []);
 
+  // ----------------------------------------------------------------------------------
+  // ANIMAÇÕES (com react-native-reanimated)
+  // ----------------------------------------------------------------------------------
+
+  // Animação para a altura do container principal do header
   const animatedContainerStyle = useAnimatedStyle(() => {
     const height = interpolate(
       keyboardAnimation.value,
-      [0, 1],
-      [screenHeight * 0.4, screenHeight * 0.14]
+      [0, 1], // De (teclado fechado) para (teclado aberto)
+      [screenHeight * 0.4, screenHeight * 0.14] // A altura varia de 40% para 14% da tela
     );
     return { height };
   });
 
+  // Animação para a opacidade do conteúdo principal (some quando o teclado abre)
   const mainContentStyle = useAnimatedStyle(() => {
-    const opacity = interpolate(keyboardAnimation.value, [0, 0.5], [1, 0]);
+    const opacity = interpolate(
+      keyboardAnimation.value,
+      [0, 0.5], // A opacidade vai de 1 a 0 na primeira metade da animação do teclado
+      [1, 0]
+    );
     return { opacity };
   });
 
+  // Animação para a opacidade do logo pequeno (aparece quando o teclado abre)
   const smallLogoStyle = useAnimatedStyle(() => {
-    const opacity = interpolate(keyboardAnimation.value, [0.5, 1], [0, 1]);
+    const opacity = interpolate(
+      keyboardAnimation.value,
+      [0.5, 1], // A opacidade vai de 0 a 1 na segunda metade da animação do teclado
+      [0, 1]
+    );
     return { opacity };
   });
+
+  // ----------------------------------------------------------------------------------
+  // RENDERIZAÇÃO DO COMPONENTE (JSX)
+  // ----------------------------------------------------------------------------------
 
   return (
     <AnimatedLinearGradient
       colors={[COLORS.primary, COLORS["gradient-end"]]}
       style={[styles.gradientContainer, animatedContainerStyle]}
     >
+      {/* View para o logo pequeno (visível com o teclado aberto) */}
       <Animated.View
         style={[styles.absoluteFill, styles.centerContent, smallLogoStyle]}
       >
@@ -71,13 +120,17 @@ const HeaderSection = ({ tips, keyboardAnimation }: HeaderSectionProps) => {
         />
       </Animated.View>
 
+      {/* View para o conteúdo principal (visível com o teclado fechado) */}
       <Animated.View style={[styles.mainContentContainer, mainContentStyle]}>
+        {/* Seção de Cima: Logo Principal */}
         <View style={styles.topSection}>
           <Image
             source={require("../../assets/images/logo001.png")}
             style={styles.largeLogo}
           />
         </View>
+
+        {/* Seção de Baixo: Slogan e Animação do Caminhão */}
         <View style={styles.bottomSection}>
           <Text style={styles.tipsText} className="font-slogan">
             {tips}
@@ -94,6 +147,10 @@ const HeaderSection = ({ tips, keyboardAnimation }: HeaderSectionProps) => {
   );
 };
 
+// ====================================================================================
+// ESTILOS (com StyleSheet)
+// ====================================================================================
+
 const styles = StyleSheet.create({
   gradientContainer: {
     width: "100%",
@@ -102,7 +159,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 24,
     paddingBottom: 50,
-    overflow: "hidden",
+    overflow: "hidden", // Garante que a animação não "vaze" para fora no Android
   },
   absoluteFill: {
     position: "absolute",
@@ -122,7 +179,7 @@ const styles = StyleSheet.create({
   },
   mainContentContainer: {
     flex: 1,
-    justifyContent: "space-between",
+    justifyContent: "space-between", // Empurra o logo para cima e a seção de baixo para baixo
   },
   topSection: {
     alignItems: "center",

@@ -17,3 +17,5 @@ export type Delivery = {
   latitude: number;
   longitude: number;
 };
+
+export type UserType = "motorista" | "cliente" | null;

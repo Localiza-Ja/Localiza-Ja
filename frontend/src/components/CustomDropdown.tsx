@@ -1,4 +1,9 @@
-//frontend/src/components/CustomDropdown.tsx
+// ====================================================================================
+// ARQUIVO: CustomDropdown.tsx
+// OBJETIVO: Componente customizado de Dropdown (lista de seleção) com animações
+//           e um truque de sobreposição para controle total do design.
+// ====================================================================================
+
 
 import React, {
   useRef,
@@ -6,9 +11,8 @@ import React, {
   useImperativeHandle,
   ForwardedRef,
 } from "react";
-import { View, Text, StyleSheet, Pressable } from "react-native";
+import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
 import { Dropdown } from "react-native-element-dropdown";
-import { COLORS } from "../styles/theme";
 import { Ionicons } from "@expo/vector-icons";
 import Animated, {
   useAnimatedStyle,
@@ -18,12 +22,26 @@ import Animated, {
   interpolateColor,
   interpolate,
 } from "react-native-reanimated";
-import { Platform } from "react-native";
+import { COLORS } from "../styles/theme";
 
+// ====================================================================================
+// CONSTANTES (Locais a este componente)
+// ====================================================================================
+
+// Define o ajuste vertical da lista de itens no Android para ficar mais próxima.
+const ANDROID_DROPDOWN_OFFSET = -5;
+
+// ====================================================================================
+// INTERFACES DE PROPRIEDADES (PROPS) E TIPOS
+// ====================================================================================
+
+// Descreve a estrutura de cada item na lista do dropdown.
 interface DropdownItem {
   label: string;
   value: string;
 }
+
+// Descreve todas as props que o componente CustomDropdown aceita.
 interface CustomDropdownProps {
   label: string;
   data: DropdownItem[];
@@ -35,8 +53,16 @@ interface CustomDropdownProps {
   onPress: () => void;
 }
 
+// ====================================================================================
+// COMPONENTE PRINCIPAL
+// ====================================================================================
+
 const CustomDropdown = forwardRef(
   (props: CustomDropdownProps, ref: ForwardedRef<{ open: () => void }>) => {
+    // --------------------------------------------------------------------------------
+    // EXTRAÇÃO DE PROPS
+    // --------------------------------------------------------------------------------
+
     const {
       label,
       data,
@@ -48,17 +74,30 @@ const CustomDropdown = forwardRef(
       onPress,
     } = props;
 
+    // --------------------------------------------------------------------------------
+    // HOOKS
+    // --------------------------------------------------------------------------------
+
+    // Referência para o componente Dropdown da biblioteca, para podermos chamar seus métodos.
     const dropdownRef = useRef<any>(null);
     const scale = useSharedValue(1);
     const pressProgress = useSharedValue(0);
 
+    // `useImperativeHandle` expõe o método `open` do Dropdown interno para o componente pai.
+    // Isso permite que a tela de Login abra o dropdown através da `ref`.
     useImperativeHandle(ref, () => ({
       open() {
         dropdownRef.current?.open();
       },
     }));
 
+    // --------------------------------------------------------------------------------
+    // ANIMAÇÕES (com react-native-reanimated)
+    // --------------------------------------------------------------------------------
+
+    // Animação para o container principal do dropdown (o campo visível).
     const animatedStyle = useAnimatedStyle(() => {
+      // Anima a cor da borda, a opacidade da sombra, o raio da sombra e a elevação.
       const animatedBorderColor = interpolateColor(
         pressProgress.value,
         [0, 1],
@@ -79,6 +118,7 @@ const CustomDropdown = forwardRef(
         [0, 1],
         [3, 8]
       );
+
       return {
         transform: [{ scale: scale.value }],
         borderColor: animatedBorderColor,
@@ -88,6 +128,11 @@ const CustomDropdown = forwardRef(
       };
     });
 
+    // --------------------------------------------------------------------------------
+    // FUNÇÕES DE MANIPULAÇÃO DE EVENTOS (Handlers)
+    // --------------------------------------------------------------------------------
+
+    // Funções para controlar a animação de "pressionado".
     const handlePressIn = () => {
       scale.value = withSpring(0.98);
       pressProgress.value = withTiming(1, { duration: 100 });
@@ -98,10 +143,12 @@ const CustomDropdown = forwardRef(
       pressProgress.value = withTiming(0, { duration: 200 });
     };
 
+    // Função que renderiza cada item da lista do dropdown.
     const renderDropdownItem = (item: DropdownItem) => {
       const isSelected = item.value === value;
       const index = data.findIndex((d) => d.value === item.value);
       const isEven = index % 2 === 0;
+
       return (
         <View
           style={[
@@ -122,22 +169,22 @@ const CustomDropdown = forwardRef(
       );
     };
 
-    const ANDROID_DROPDOWN_OFFSET = -5; 
+    // --------------------------------------------------------------------------------
+    // RENDERIZAÇÃO DO COMPONENTE (JSX)
+    // --------------------------------------------------------------------------------
 
     return (
-      <View className="w-full mb-3">
-        <Text
-          className="text-text-secondary font-semibold mb-2 ml-1 text-sm"
-          allowFontScaling={false}
-        >
-          {label}
-        </Text>
-        <View style={{ position: "relative", width: "100%", height: 58 }}>
+      <View style={styles.outerContainer}>
+        <Text style={styles.label}>{label}</Text>
+
+        {/* O truque deste componente: um container relativo com duas camadas. */}
+        <View style={styles.container}>
+          {/* CAMADA 1: O botão customizado e visível que o usuário interage. */}
           <Pressable
             onPressIn={handlePressIn}
             onPressOut={handlePressOut}
             onPress={onPress}
-            style={{ zIndex: 10 }}
+            style={{ zIndex: 1 }}
           >
             <Animated.View style={[styles.dropdown, animatedStyle]}>
               <Text
@@ -157,6 +204,9 @@ const CustomDropdown = forwardRef(
               />
             </Animated.View>
           </Pressable>
+
+          {/* CAMADA 2: O Dropdown real da biblioteca, invisível e escondido atrás. */}
+          {/* Ele cuida de toda a lógica de abrir a lista, mas sua aparência é controlada por nós. */}
           <View style={styles.realDropdownContainer}>
             <Dropdown
               ref={dropdownRef}
@@ -178,9 +228,6 @@ const CustomDropdown = forwardRef(
               onFocus={onFocus}
               onBlur={onBlur}
               dropdownPosition="bottom"
-              placeholder={placeholder}
-              placeholderStyle={styles.placeholderStyle}
-              selectedTextStyle={styles.selectedTextStyle}
             />
           </View>
         </View>
@@ -189,7 +236,28 @@ const CustomDropdown = forwardRef(
   }
 );
 
+// ====================================================================================
+// ESTILOS (com StyleSheet)
+// ====================================================================================
+
 const styles = StyleSheet.create({
+  outerContainer: {
+    width: "100%",
+    marginBottom: 12,
+  },
+  label: {
+    color: COLORS["text-secondary"],
+    fontWeight: "600",
+    marginBottom: 8,
+    marginLeft: 4,
+    fontSize: 14,
+  },
+  container: {
+    position: "relative",
+    width: "100%",
+    height: 58,
+  },
+  // O campo visível do dropdown
   dropdown: {
     height: Platform.OS === "android" ? 48 : 58,
     width: "100%",
@@ -207,6 +275,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
+  // Container do dropdown invisível
   realDropdownContainer: {
     position: "absolute",
     top: 0,
@@ -216,7 +285,11 @@ const styles = StyleSheet.create({
     zIndex: 0,
     opacity: 0,
   },
-  realDropdownStyle: { width: "100%", height: "100%" },
+  realDropdownStyle: {
+    width: "100%",
+    height: "100%",
+  },
+  // Estilo da lista de itens que abre
   containerStyle: {
     borderRadius: 12,
     backgroundColor: COLORS["input-background"],
@@ -225,20 +298,37 @@ const styles = StyleSheet.create({
     marginTop: 4,
     overflow: "hidden",
   },
+  // Container de cada item da lista
   listItemContainer: {
     paddingVertical: Platform.OS === "android" ? 12 : 14,
     paddingHorizontal: 16,
     backgroundColor: COLORS["input-background"],
   },
-  listItemContainerOdd: { backgroundColor: COLORS.gray?.[200] || "#F8F9FA" },
-  listItemText: { color: COLORS["text-primary"], fontSize: 14 },
+  // Cor de fundo para itens ímpares (efeito zebrado)
+  listItemContainerOdd: {
+    backgroundColor: COLORS.gray?.[100] || "#F8F9FA",
+  },
+  // Texto de um item normal da lista
+  listItemText: {
+    color: COLORS["text-primary"],
+    fontSize: 14,
+  },
+  // Texto do item SELECIONADO na lista
   selectedListItemText: {
     color: COLORS.primary,
     fontWeight: "bold",
     fontSize: 15,
   },
-  placeholderStyle: { fontSize: 14, color: COLORS.placeholder },
-  selectedTextStyle: { fontSize: 14, color: COLORS["text-primary"] },
+  // Estilos para o texto DENTRO do campo visível
+  placeholderStyle: {
+    fontSize: 14,
+    color: COLORS.placeholder,
+  },
+  selectedTextStyle: {
+    fontSize: 14,
+    color: COLORS["text-primary"],
+  },
+  // Estilo para a sombra da lista
   shadow: {
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 5 },
