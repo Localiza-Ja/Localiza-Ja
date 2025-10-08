@@ -1,0 +1,690 @@
+{
+	"info": {
+		"_postman_id": "7a7ce6ff-4800-46bd-9f94-1c59b968830f",
+		"name": "API de Gerenciamento de Entregas",
+		"description": "Coleção de testes para a API de Gerenciamento de Entregas em http://localhost:5000, organizada e ajustada com base na documentação da API.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "29984139",
+		"_collection_link": "https://localiza-j.postman.co/workspace/Localiza-J%C3%A1~62fe4f7c-f73b-4f03-b660-997190000456/collection/29984139-7a7ce6ff-4800-46bd-9f94-1c59b968830f?action=share&source=collection_link&creator=29984139"
+	},
+	"item": [
+		{
+			"name": "General",
+			"item": [
+				{
+					"name": "Ping",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/ping",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"ping"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Autenticação",
+			"item": [
+				{
+					"name": "Login Usuário",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"cnh\": \"12345678901\",\n  \"placa_veiculo\": \"XYZ-9876\"\n}\n"
+						},
+						"url": {
+							"raw": "{{base_url}}/usuarios/login",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"usuarios",
+								"login"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Logout Usuário",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{jwt_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/usuarios/logout",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"usuarios",
+								"logout"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Verificar Sessão",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{jwt_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/usuarios/session",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"usuarios",
+								"session"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Usuários",
+			"item": [
+				{
+					"name": "Criar Usuário",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"nome\": \"Motorista Teste\",\n  \"placa_veiculo\": \"XYZ-9876\",\n  \"cnh\": \"12345678901\",\n  \"telefone\": \"11999999999\"\n}\n"
+						},
+						"url": {
+							"raw": "{{base_url}}/usuarios",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"usuarios"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Listar Usuários",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{jwt_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/usuarios",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"usuarios"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Obter Usuário por ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{jwt_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/usuarios/{{user_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"usuarios",
+								"{{user_id}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Atualizar Usuário",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{jwt_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"nome\": \"Motorista Atualizado\",\n  \"placa_veiculo\": \"ABC-1234\",\n  \"cnh\": \"98765432109\",\n  \"telefone\": \"11988888888\"\n}\n"
+						},
+						"url": {
+							"raw": "{{base_url}}/usuarios/{{user_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"usuarios",
+								"{{user_id}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Deletar Usuário",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{jwt_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/usuarios/{{user_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"usuarios",
+								"{{user_id}}"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Entregas",
+			"item": [
+				{
+					"name": "Criar Entrega",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{jwt_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"motorista_id\": \"{{motorista_id}}\",\n  \"endereco_entrega\": \"Rua Exemplo, 123\",\n  \"nome_cliente\": \"Cliente Teste\",\n  \"observacao\": \"Deixar na portaria\",\n  \"foto_prova\": \"\",\n  \"motivo\": \"\",\n  \"nome_recebido\": \"\",\n  \"status\": \"pendente\"\n}\n"
+						},
+						"url": {
+							"raw": "{{base_url}}/entregas",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"entregas"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Listar Entregas",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{jwt_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/entregas",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"entregas"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Obter Entrega por ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{jwt_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/entregas/{{entrega_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"entregas",
+								"{{entrega_id}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Atualizar Entrega",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{jwt_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"motorista_id\": \"{{motorista_id}}\",\n  \"endereco_entrega\": \"Rua Atualizada, 456\",\n  \"nome_cliente\": \"Cliente Atualizado\",\n  \"observacao\": \"Entregar pessoalmente\",\n  \"foto_prova\": \"\",\n  \"motivo\": \"\",\n  \"nome_recebido\": \"\",\n  \"status\": \"em_rota\"\n}\n"
+						},
+						"url": {
+							"raw": "{{base_url}}/entregas/{{entrega_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"entregas",
+								"{{entrega_id}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Atualizar Status da Entrega",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{jwt_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"status\": \"entregue\",\n  \"nome_recebido\": \"Maria\",\n  \"motivo\": \"\",\n  \"foto_prova\": \"\"\n}\n"
+						},
+						"url": {
+							"raw": "{{base_url}}/entregas/{{entrega_id}}/status",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"entregas",
+								"{{entrega_id}}",
+								"status"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Deletar Entrega",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{jwt_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/entregas/{{entrega_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"entregas",
+								"{{entrega_id}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Buscar Entrega por Número do Pedido",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/entregas/numero_pedido/{{numero_pedido}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"entregas",
+								"numero_pedido",
+								"{{numero_pedido}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Listar Entregas por Motorista",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{jwt_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/entregas/motorista/{{motorista_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"entregas",
+								"motorista",
+								"{{motorista_id}}"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Localizações",
+			"item": [
+				{
+					"name": "Criar Localização",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{jwt_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"entrega_id\": \"{{entrega_id}}\",\n  \"motorista_id\": \"{{motorista_id}}\",\n  \"latitude\": -23.55,\n  \"longitude\": -46.63,\n  \"data_hora\": \"2025-10-01T12:00:00\"\n}\n"
+						},
+						"url": {
+							"raw": "{{base_url}}/localizacoes",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"localizacoes"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Listar Localizações",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{jwt_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/localizacoes",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"localizacoes"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Obter Localização por ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{jwt_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/localizacoes/{{loc_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"localizacoes",
+								"{{loc_id}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Listar Localizações por Entrega",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{jwt_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/localizacoes/entrega/{{entrega_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"localizacoes",
+								"entrega",
+								"{{entrega_id}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Listar Localizações por Motorista",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{jwt_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/localizacoes/motorista/{{motorista_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"localizacoes",
+								"motorista",
+								"{{motorista_id}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Atualizar Localização",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{jwt_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"entrega_id\": \"{{entrega_id}}\",\n  \"motorista_id\": \"{{motorista_id}}\",\n  \"latitude\": -23.56,\n  \"longitude\": -46.64,\n  \"data_hora\": \"2025-10-01T13:00:00\"\n}\n"
+						},
+						"url": {
+							"raw": "{{base_url}}/localizacoes/{{loc_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"localizacoes",
+								"{{loc_id}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Deletar Localização",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{jwt_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/localizacoes/{{loc_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"localizacoes",
+								"{{loc_id}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Criar Localização via IoT",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"latitude\": -23.57,\n  \"longitude\": -46.65\n}\n"
+						},
+						"url": {
+							"raw": "{{base_url}}/localizacoes/iot",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"localizacoes",
+								"iot"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:5000"
+		},
+		{
+			"key": "jwt_token",
+			"value": ""
+		},
+		{
+			"key": "user_id",
+			"value": ""
+		},
+		{
+			"key": "motorista_id",
+			"value": ""
+		},
+		{
+			"key": "entrega_id",
+			"value": ""
+		},
+		{
+			"key": "numero_pedido",
+			"value": ""
+		},
+		{
+			"key": "loc_id",
+			"value": ""
+		}
+	]
+}
