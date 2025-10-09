@@ -55,7 +55,7 @@ A aplicação também inclui validações de dados (ex.: formato de CNH, placa d
 
 ### Variáveis de Ambiente
 
-Crie um arquivo `.env` na raiz do projeto com as seguintes variáveis. Elas são carregadas via `python-dotenv`.
+Crie um arquivo `.env` na raiz do projeto com as seguintes variáveis (existe um arquivo copia.env de base). Elas são carregadas via `python-dotenv`.
 
 | Variável         | Descrição                                                                                 | Exemplo/Explicação                                                                                             | Obrigatória |
 | ---------------- | ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | ----------- |
