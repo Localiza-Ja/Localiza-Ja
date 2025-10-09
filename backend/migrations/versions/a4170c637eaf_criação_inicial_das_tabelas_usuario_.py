@@ -21,7 +21,7 @@ def upgrade():
     op.create_table('usuario',
     sa.Column('id', sa.UUID(), nullable=False),
     sa.Column('nome', sa.String(length=255), nullable=False),
-    sa.Column('placa_veiculo', sa.String(length=7), nullable=False),
+    sa.Column('placa_veiculo', sa.String(length=8), nullable=False),
     sa.Column('cnh', sa.String(length=11), nullable=False),
     sa.Column('telefone', sa.String(length=11), nullable=False),
     sa.Column('criado_em', sa.DateTime(), nullable=True),
