@@ -1,166 +1,158 @@
-"""
-Módulo: arduino.ino
-Descrição: Código referente ao ESP 32, suas conexões e funções com o rastreador.
-Autor: Gustavo Henrique dos Anjos
-Data: 13/09/2025
-"""
-
+#include <Arduino.h>
 #include <WiFi.h>
-#include <WebServer.h>
-#include <ArduinoJson.h>
 #include <HTTPClient.h>
+#include <ArduinoJson.h>
 
-// -------- CONFIGURAÇÕES --------
-const char* ssid = "123";
-const char* password = "********";
+#define SERIAL_BAUD 115200
 
-// URL do backend (substitua pelo IP da sua máquina rodando o backend)
-const char* backendURL = "http://192.168.0.100:8000/sensores"; 
+// --- 1. CONFIGURAÇÕES PRINCIPAIS ---
+const char* ssid = "123";               // SUBSTITUA PELO SEU SSID
+const char* password = "********";      // SUBSTITUA PELA SUA SENHA
 
-// UART para o tracker (Serial2)
-const int RX_PIN = 16;
-const int TX_PIN = 17;
-const unsigned long TRACKER_BAUD = 9600;
+// IDs que o seu backend espera (UUIDs válidos)
+// Estes IDs são obrigatórios para o seu modelo 'Localizacao'
+const char* motoristaId = "********-e5f6-7890-1234-567890abcdef"; // Exemplo UUID
+const char* entregaId = "********-b6a5-4321-fedc-ba9876543210";   // Exemplo UUID
 
-// Web
-WebServer server(80);
+// Endereço e Porta do Servidor Flask
+const char* BACKEND_IP = "192.168.168.100";
+const uint16_t BACKEND_PORT = 5000;
+const char* ENDPOINT_PATH = "/localizacoes/iot"; // Rota no Flask para receber o POST
 
-// Estado GPS lido / simulado
-String lastRawLine = "";
-String lastGPRMC = "";
-String lastGPGGA = "";
+// --- 2. FUNÇÕES AUXILIARES DE TESTE (DADOS ESTÁTICOS) ---
 
-volatile String currentLine = "";
-
-double latitude = 0.0;
-double longitude = 0.0;
-String fixTime = "";
-int numSatellites = 0;
-double altitudeMeters = 0.0;
-bool haveFix = false;
-unsigned long lastUpdateMillis = 0;
-
-// ---------- SIMULAÇÃO DE DADOS ----------
-void simulateGPS() {
-  latitude = -23.5505;   // SP
-  longitude = -46.6333;
-  haveFix = true;
-  fixTime = "123519";
-  numSatellites = 7;
-  altitudeMeters = 760.5;
-  lastRawLine = "$GPRMC,123519,A,4807.038,N,01131.000,E,022.4,084.4,230394,003.1,W*6A";
-  lastUpdateMillis = millis();
+// **SIMULAÇÃO**: Retorna coordenadas estáticas (para teste)
+void getGpsCoordinates(float &lat, float &lon) {
+    // Coordenadas simuladas (Exemplo: São Paulo)
+    lat = -23.5678901; 
+    lon = -46.6789012; 
+    // Em produção, esta função leria um módulo GPS (e.g., NEO-6M)
 }
 
-// ---------- Envio para o Backend ----------
-void sendToBackend() {
-  if (WiFi.status() == WL_CONNECTED) {
+// **SIMULAÇÃO**: Retorna um timestamp estático no formato ISO 8601 exigido pelo backend
+String getNtpTimeFormatted() {
+    // O backend (PostgreSQL/SQLAlchemy) espera este formato: YYYY-MM-DD hh:mm:ss
+    return "2025-10-01 10:30:00"; 
+    // Em produção, esta função usaria NTP ou um RTC (Real-Time Clock)
+}
+
+// Compõe URL completa
+String backendUrl() {
+    return String("http://") + BACKEND_IP + ":" + String(BACKEND_PORT) + String(ENDPOINT_PATH);
+}
+
+// --- 3. FUNÇÃO PRINCIPAL DE ENVIO ---
+
+void sendLocation() {
+    if (WiFi.status() != WL_CONNECTED) {
+        Serial.println("WiFi nao conectado — pulando envio.");
+        return;
+    }
+
     HTTPClient http;
-    http.begin(backendURL);
+    String url = backendUrl();
+    Serial.print("Enviando POST para: ");
+    Serial.println(url);
+
+    http.begin(url);
+    // Ajustado para 15s de timeout.
+    http.setTimeout(15000); 
     http.addHeader("Content-Type", "application/json");
 
-    StaticJsonDocument<256> doc;
-    doc["latitude"] = latitude;
-    doc["longitude"] = longitude;
-    doc["haveFix"] = haveFix;
-    doc["fixTime"] = fixTime;
-    doc["numSatellites"] = numSatellites;
-    doc["altitude"] = altitudeMeters;
-    String json;
-    serializeJson(doc, json);
+    // 1. Obter dados estáticos (coordenadas e timestamp)
+    float currentLat, currentLon;
+    getGpsCoordinates(currentLat, currentLon);
+    String dataHora = getNtpTimeFormatted();
 
-    int httpResponseCode = http.POST(json);
-    if (httpResponseCode > 0) {
-      Serial.print("Enviado ao backend. Código: ");
-      Serial.println(httpResponseCode);
+    // 2. Buffer para JSON: 400 bytes é seguro para dois UUIDs, coordenadas e timestamp.
+    StaticJsonDocument<400> doc; 
+
+    // 3. Incluir TODOS os campos exigidos pelo modelo 'Localizacao' do backend
+    doc["entrega_id"] = entregaId;
+    doc["motorista_id"] = motoristaId;
+    doc["latitude"] = currentLat;
+    doc["longitude"] = currentLon;
+    doc["data_hora"] = dataHora; // Enviando o timestamp
+
+    String payload;
+    // O tamanho do payload será menor que 400, mas o buffer é um limite.
+    size_t size = serializeJson(doc, payload);
+
+    Serial.print("Payload (");
+    Serial.print(size);
+    Serial.print(" bytes): ");
+    Serial.println(payload);
+
+    // 4. Envio HTTP
+    int httpCode = http.POST(payload);
+
+    if (httpCode > 0) {
+        if (httpCode >= 200 && httpCode < 300) {
+            // Sucesso (2xx)
+            String response = http.getString();
+            Serial.print("HTTP Code: ");
+            Serial.println(httpCode);
+            Serial.print("Resposta servidor (Sucesso): ");
+            Serial.println(response);
+        } else {
+            // Erro do Servidor (4xx, 5xx)
+            Serial.print("HTTP Code (Erro Servidor): ");
+            Serial.println(httpCode);
+            Serial.print("Resposta servidor (Detalhes): ");
+            Serial.println(http.getString());
+        }
     } else {
-      Serial.print("Erro ao enviar: ");
-      Serial.println(httpResponseCode);
+        // Erro de Conexão (Timeout, DNS, etc.)
+        Serial.print("Erro ao enviar HTTP. Código: ");
+        Serial.println(httpCode);
+        Serial.print("Descrição: ");
+        Serial.println(http.errorToString(httpCode));
     }
+
     http.end();
-  }
 }
 
-// ---------- Web handlers ----------
-void handleRoot() {
-  String page = "<!doctype html><html><head><meta charset='utf-8'><title>Tracker</title>";
-  page += "<style>body{font-family:Arial;margin:16px} .k{font-weight:bold}</style></head><body>";
-  page += "<h1>ESP32 - SinoTrack ST-901 (visualização)</h1>";
-  page += "<div id='content'>Carregando...</div>";
-  page += "<script>\nasync function fetchData(){try{let r=await fetch('/data');let j=await r.json();let html='';";
-  page += "html += '<p><b>Latitude:</b> '+ j.latitude +'</p>';";  
-  page += "html += '<p><b>Longitude:</b> '+ j.longitude +'</p>';";  
-  page += "html += '<p><b>Fix:</b> '+ (j.haveFix? 'SIM':'NAO') + '  <b>Time:</b> '+ j.fixTime +'</p>';";  
-  page += "html += '<p><b>Sats:</b> '+ j.numSatellites + ' <b>Altitude:</b> ' + j.altitude + ' m</p>';";  
-  page += "html += '<p><b>Última RAW:</b> <pre>'+ j.lastRaw +'</pre></p>';";  
-  page += "html += '<p><a href=\"/data\" target=\"_blank\">Ver JSON cru</a></p>';";  
-  page += "document.getElementById('content').innerHTML = html;}catch(e){document.getElementById('content').innerText='Erro: '+e}}";  
-  page += "setInterval(fetchData,2000); fetchData();</script></body></html>";
-  server.send(200, "text/html", page);
-}
+// --- 4. ARDUINO SETUP E LOOP ---
 
-void handleData() {
-  StaticJsonDocument<256> doc;
-  doc["latitude"] = latitude;
-  doc["longitude"] = longitude;
-  doc["haveFix"] = haveFix;
-  doc["fixTime"] = fixTime;
-  doc["numSatellites"] = numSatellites;
-  doc["altitude"] = altitudeMeters;
-  doc["lastRaw"] = lastRawLine;
-  doc["lastUpdateMillis"] = lastUpdateMillis;
-  String out;
-  serializeJson(doc, out);
-  server.send(200, "application/json", out);
-}
-
-// ---------- Setup & Loop ----------
 void setup() {
-  Serial.begin(115200);
-  delay(100);
-
-  // Inicializa UART (mesmo sem tracker físico, não dá problema)
-  Serial2.begin(TRACKER_BAUD, SERIAL_8N1, RX_PIN, TX_PIN);
-  Serial.println("Iniciando ESP32 Tracker interface...");
-
-  // Conecta WiFi
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(ssid, password);
-  Serial.print("Conectando WiFi");
-  unsigned long t0 = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - t0 < 20000) {
-    Serial.print('.');
+    Serial.begin(SERIAL_BAUD);
     delay(500);
-  }
-  if (WiFi.status() == WL_CONNECTED) {
     Serial.println();
-    Serial.print("WiFi OK. IP: ");
-    Serial.println(WiFi.localIP());
-  } else {
-    Serial.println();
-    Serial.println("Falha WiFi (timeout). Verifique SSID/senha.");
-  }
+    Serial.println("ESP32 iniciando...");
 
-  // Web endpoints
-  server.on("/", handleRoot);
-  server.on("/data", handleData);
-  server.begin();
-  Serial.println("Servidor web iniciado.");
+    WiFi.mode(WIFI_STA);
+    WiFi.begin(ssid, password);
+
+    Serial.print("Conectando ao WiFi");
+    unsigned long t0 = millis();
+    // Tenta conectar por no máximo 20 segundos
+    while (WiFi.status() != WL_CONNECTED && millis() - t0 < 20000) {
+        Serial.print('.');
+        delay(500);
+    }
+    
+    if (WiFi.status() == WL_CONNECTED) {
+        Serial.println();
+        Serial.print("WiFi OK. IP: ");
+        Serial.println(WiFi.localIP());
+    } else {
+        Serial.println();
+        Serial.println("Falha ao conectar no WiFi (timeout). Verifique SSID/senha.");
+    }
 }
 
 void loop() {
-  // Simula GPS (enquanto não tiver o ST-901 real)
-  simulateGPS();
+    // Variável 'last' deve ser estática para manter o valor entre chamadas de loop()
+    static unsigned long lastSend = 0; 
+    // Intervalo de 60 segundos (10000 ms)
+    const unsigned long sendInterval = 60000; 
 
-  // Web
-  server.handleClient();
+    if (millis() - lastSend >= sendInterval) {
+        // CHAMADA CORRIGIDA para a função sendLocation()
+        sendLocation(); 
+        lastSend = millis();
+    }
 
-  // Envia para backend a cada 30s
-  static unsigned long lastSend = 0;
-  if (millis() - lastSend > 30000) {
-    sendToBackend();
-    lastSend = millis();
-  }
-
-  delay(1);
+    // Pequeno delay no final do loop para evitar watchdog timer
+    delay(10); 
 }
