@@ -91,7 +91,7 @@ Crie um arquivo `.env` na raiz do projeto com as seguintes variáveis (existe um
    - Inicialize as migrações:
 
      ```
-     export FLASK_AP=main.py # No Windows: set FLASK_AP=main.py
+     export FLASK_APP=main.py # No Windows: set FLASK_APP=main.py
      flask db init  # Apenas na primeira vez
      flask db migrate
      flask db upgrade
