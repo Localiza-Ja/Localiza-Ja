@@ -9,11 +9,6 @@
 const char* ssid = "123";               // SUBSTITUA PELO SEU SSID
 const char* password = "********";      // SUBSTITUA PELA SUA SENHA
 
-// IDs que o seu backend espera (UUIDs válidos)
-// Estes IDs são obrigatórios para o seu modelo 'Localizacao'
-const char* motoristaId = "********-e5f6-7890-1234-567890abcdef"; // Exemplo UUID
-const char* entregaId = "********-b6a5-4321-fedc-ba9876543210";   // Exemplo UUID
-
 // Endereço e Porta do Servidor Flask
 const char* BACKEND_IP = "192.168.168.100";
 const uint16_t BACKEND_PORT = 5000;
@@ -68,8 +63,6 @@ void sendLocation() {
     StaticJsonDocument<400> doc; 
 
     // 3. Incluir TODOS os campos exigidos pelo modelo 'Localizacao' do backend
-    doc["entrega_id"] = entregaId;
-    doc["motorista_id"] = motoristaId;
     doc["latitude"] = currentLat;
     doc["longitude"] = currentLon;
     doc["data_hora"] = dataHora; // Enviando o timestamp
