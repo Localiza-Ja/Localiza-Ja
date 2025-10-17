@@ -1,9 +1,4 @@
-// ====================================================================================
-// ARQUIVO: index.tsx (Tela de Login)
-// OBJETIVO: Tela principal de entrada do aplicativo, onde o usuário se identifica
-//           como Cliente ou Motorista.
-// ====================================================================================
-
+// frontend/src/app/index.tsx
 
 import React, { useState, useRef, useEffect } from "react";
 import {
@@ -15,6 +10,7 @@ import {
   ScrollView,
   Keyboard,
   StyleSheet,
+  Alert,
 } from "react-native";
 import Animated, {
   useSharedValue,
@@ -31,56 +27,30 @@ import HeaderSection from "../components/HeaderSection";
 import CustomDropdown from "../components/CustomDropdown";
 import { COLORS, SPACING } from "../styles/theme";
 import { UserType } from "../types";
+import { loginMotorista } from "../services/api";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
-// ====================================================================================
-// CONSTANTES (Locais a esta tela)
-// ====================================================================================
 
-// Dados para o dropdown de seleção de tipo de usuário.
+const DEV_CNH = "11111111111";
+const DEV_PLACA = "JSP-0101";
+
 const userTypeData = [
   { label: "Motorista", value: "motorista" },
   { label: "Cliente", value: "cliente" },
 ];
 
-// Texto de ajuda para o formulário do cliente.
 const clienteHelperText =
   "Em caso de dúvida consulte número do pedido na Nota Fiscal ou entre em contato com o atendimento ao cliente.";
 
-// ====================================================================================
-// COMPONENTE PRINCIPAL (TELA DE LOGIN)
-// ====================================================================================
-
 export default function Login() {
-  // ----------------------------------------------------------------------------------
-  // ESTADO (State)
-  // ----------------------------------------------------------------------------------
-
-  // Armazena o tipo de usuário selecionado ('motorista', 'cliente' ou null)
   const [userType, setUserType] = useState<UserType>(null);
-  // Armazena o texto dos campos do formulário
   const [pedido, setPedido] = useState("");
-  const [cnh, setCnh] = useState("");
-  const [placa, setPlaca] = useState("");
-  // Controla se a lista do dropdown está aberta (para desativar o scroll da tela)
+  const [cnh, setCnh] = useState(DEV_CNH);
+  const [placa, setPlaca] = useState(DEV_PLACA);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-
-  // ----------------------------------------------------------------------------------
-  // REFERÊNCIAS (Refs)
-  // ----------------------------------------------------------------------------------
-
-  // Referência para o campo 'placa', para poder focar nele a partir do campo 'cnh'
   const placaInputRef = useRef<TextInput>(null);
-  // Referência para o dropdown, para podermos abri-lo programaticamente
   const dropdownRef = useRef<{ open: () => void }>(null);
-
-  // ----------------------------------------------------------------------------------
-  // ANIMAÇÕES (com react-native-reanimated)
-  // ----------------------------------------------------------------------------------
-
-  // Valor compartilhado que representa o estado do teclado (0 = fechado, 1 = aberto)
   const keyboardAnimation = useSharedValue(0);
-
-  // Animação do botão "Acessar/Rastrear". Atualmente desativada (BUTTON_SHIFT = 0).
   const buttonAnimatedStyle = useAnimatedStyle(() => {
     const BUTTON_SHIFT = 0;
     const translateY = interpolate(
@@ -93,7 +63,6 @@ export default function Login() {
     };
   });
 
-  // Animação para o texto "Seja bem vindo(a)!" que aparece no corpo do formulário.
   const welcomeAnimatedStyle = useAnimatedStyle(() => {
     let fontSize = 22;
     let opacity = 1;
@@ -103,7 +72,6 @@ export default function Login() {
 
     const initialFontSize = Platform.OS === "ios" ? 23 : 21;
 
-    // Aplica animações diferentes com base no tipo de usuário e no estado do teclado
     switch (userType) {
       case "motorista":
         opacity = interpolate(keyboardAnimation.value, [0, 1], [1, 0]);
@@ -141,7 +109,6 @@ export default function Login() {
     return { opacity, fontSize, marginBottom, lineHeight, height };
   });
 
-  // Este hook cuida de "ouvir" os eventos do teclado para iniciar as animações.
   useEffect(() => {
     const showEvent =
       Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
@@ -161,28 +128,46 @@ export default function Login() {
       });
     });
 
-    // Função de limpeza: remove os "ouvintes" quando o componente é desmontado
     return () => {
       hideListener.remove();
       showListener.remove();
     };
   }, []);
 
-  // ----------------------------------------------------------------------------------
-  // FUNÇÕES DE MANIPULAÇÃO DE EVENTOS (Handlers)
-  // ----------------------------------------------------------------------------------
-
-  // Função chamada quando o botão principal é pressionado.
-  const handleAccess = () => {
+  const handleAccess = async () => {
     Keyboard.dismiss();
+
     if (userType === "motorista") {
-      router.push("/map");
+      if (!cnh || !placa) {
+        Alert.alert("Atenção", "Por favor, preencha os campos de CNH e Placa.");
+        return;
+      }
+
+      try {
+        console.log(`Tentando login para CNH: ${cnh} e Placa: ${placa}`);
+        const response = await loginMotorista(cnh, placa);
+
+        if (response.status === 200) {
+          const { access_token } = response.data;
+          await AsyncStorage.setItem("@user_token", access_token);
+          console.log("Login realizado com sucesso! Navegando para o mapa...");
+          router.push("/map");
+        }
+      } catch (error: any) {
+        console.error("Erro no login:", error.response?.data || error.message);
+        const errorMessage =
+          error.response?.data?.error ||
+          "Credenciais inválidas ou erro no servidor. Tente novamente.";
+        Alert.alert("Erro de Login", errorMessage);
+      }
     } else if (userType === "cliente") {
-      router.push("/client");
+      Alert.alert(
+        "Em breve",
+        "A funcionalidade de rastreio para clientes ainda está em desenvolvimento."
+      );
     }
   };
 
-  // Função para abrir o dropdown ou fechar o teclado.
   const handleDropdownPress = () => {
     if (Keyboard.isVisible()) {
       Keyboard.dismiss();
@@ -190,10 +175,6 @@ export default function Login() {
       dropdownRef.current?.open();
     }
   };
-
-  // ----------------------------------------------------------------------------------
-  // RENDERIZAÇÃO DO COMPONENTE (JSX)
-  // ----------------------------------------------------------------------------------
 
   return (
     <SafeAreaView style={styles.container} edges={["right", "left", "bottom"]}>
@@ -229,7 +210,6 @@ export default function Login() {
                 onPress={handleDropdownPress}
               />
 
-              {/* Renderização condicional do formulário do Cliente */}
               {userType === "cliente" && (
                 <>
                   <InputField
@@ -249,14 +229,14 @@ export default function Login() {
                 </>
               )}
 
-              {/* Renderização condicional do formulário do Motorista */}
               {userType === "motorista" && (
                 <>
                   <InputField
                     label="CNH"
-                    placeholder="XX-XXXXX-XXXX"
+                    placeholder="Apenas números"
                     value={cnh}
                     onChangeText={setCnh}
+                    keyboardType="numeric"
                     returnKeyType="next"
                     onSubmitEditing={() => placaInputRef.current?.focus()}
                     blurOnSubmit={false}
@@ -264,9 +244,10 @@ export default function Login() {
                   <InputField
                     ref={placaInputRef}
                     label="PLACA VEÍCULO"
-                    placeholder="ABC 1234"
+                    placeholder="AAA-1234"
                     value={placa}
                     onChangeText={setPlaca}
+                    autoCapitalize="characters"
                     returnKeyType="done"
                     onSubmitEditing={handleAccess}
                   />
@@ -287,10 +268,6 @@ export default function Login() {
     </SafeAreaView>
   );
 }
-
-// ====================================================================================
-// ESTILOS (com StyleSheet)
-// ====================================================================================
 
 const styles = StyleSheet.create({
   container: {
