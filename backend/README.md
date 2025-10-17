@@ -91,7 +91,7 @@ Crie um arquivo `.env` na raiz do projeto com as seguintes variáveis (existe um
    - Inicialize as migrações:
 
      ```
-     export FLASK_AP=main.py # No Windows: set FLASK_AP=main.py
+     export FLASK_APP=main.py # No Windows: set FLASK_APP=main.py
      flask db init  # Apenas na primeira vez
      flask db migrate
      flask db upgrade
@@ -195,7 +195,7 @@ Os endpoints são organizados por módulo. Todos os endpoints protegidos requere
 
 #### GET /usuarios/session
 
-- **Descrição**: Verifica a sessão e retorna dados do usuário logado.
+- **Descrição**: Verifica a sessão, renova o token e retorna dados do usuário logado.
 - **Parâmetros de Requisição**: Nenhum.
 - **Headers**: `Authorization: Bearer <token>` (**obrigatório**).
 - **Exemplo de Requisição cURL**:
@@ -214,7 +214,8 @@ Os endpoints são organizados por módulo. Todos os endpoints protegidos requere
       "criado_em": "YYYY-MM-DDTHH:MM:SS",
       "atualizado_em": "YYYY-MM-DDTHH:MM:SS"
     },
-    "message": "Sessão válida.",
+    "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "message": "Sessão válida e renovada com sucesso.",
     "status": true
   }
   ```

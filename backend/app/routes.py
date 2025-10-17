@@ -85,7 +85,7 @@ def validar_placa(value):
         raise ValueError("Placa não pode ser vazia")
     if not re.match(r'^[A-Za-z]{3}-[0-9]{4}$', value):
         raise ValueError("Placa deve seguir o formato XXX-1234")
-    return value.upper()  # Normaliza para maiúsculas
+    return value.upper()
 
 def validar_endereco(value):
     """
@@ -240,29 +240,31 @@ class SessionResource(Resource):
     @jwt_required()
     def get(self):
         """
-        Obtém os dados do usuário logado.
+        Valida o token JWT atual, retorna os dados do usuário logado e renova o token estendendo seu tempo de expiração.
 
         Returns:
-            tuple: JSON com dados do usuário, mensagem de sucesso e 'status' verdadeiro (status 200).
-            tuple: JSON com 'error' e 'status' falso (status 404) se usuário não for encontrado.
-            tuple: JSON com 'error' e 'status' falso (status 401) se token for inválido.
+            tuple: JSON com dados do usuário, novo token de acesso, mensagem de sucesso e 'status' verdadeiro (status 200).
+            tuple: JSON com 'error' e 'status' falso (status 404) se o usuário não for encontrado.
             tuple: JSON com 'message' e 'status' falso (status 500) em caso de erro interno.
 
         Raises:
-            Exception: Para erros internos.
+            Exception: Erros gerais (tratados pelo errorhandler global).
 
-        NOTE: Requer autenticação via JWT.
+        NOTE: O token é validado automaticamente pelo @jwt_required(), incluindo verificação de blacklist e expiração.
+              Um novo token é gerado para renovar a sessão, mantendo o identity do usuário.
         """
         try:
             user_id = get_jwt_identity()
-            if not user_id:
-                return {"error": "Token inválido: identidade não encontrada.", "status": False}, 401
-            usuario = Usuario.query.get(user_id)
-            if not usuario:
-                return {"error": "Usuário não encontrado.", "status": False}, 404
+            user = Usuario.query.get(user_id)
+            if not user:
+                return {"error": gettext("Usuário não encontrado."), "status": False}, 404
+
+            new_token = create_access_token(identity=user_id)
+
             return {
-                "Usuario": usuario.json(),
-                "message": gettext("Sessão obtida com sucesso."),
+                "Usuario": user.json(),
+                "access_token": new_token,
+                "message": gettext("Sessão válida e renovada com sucesso."),
                 "status": True
             }, 200
         except Exception as e:
