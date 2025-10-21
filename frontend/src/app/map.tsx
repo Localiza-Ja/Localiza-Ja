@@ -1,4 +1,4 @@
-// frontend/src/app/map.tsx (VERSÃO FINAL CORRIGIDA)
+// frontend/src/app/map.tsx
 
 import { router } from "expo-router";
 import {
@@ -8,7 +8,7 @@ import {
   Alert,
   ActivityIndicator,
   TouchableOpacity,
-  Text,
+  Platform,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import MapView, { Marker, Polyline } from "react-native-maps";
@@ -25,6 +25,7 @@ import {
   updateStatusEntrega,
 } from "../services/api";
 import { Feather } from "@expo/vector-icons";
+// import { BlurView } from "expo-blur"; // <-- REMOVIDO
 
 const appLogo = require("../../assets/images/lj-logo.png");
 const navigationArrow = require("../../assets/images/navigation-arrow.png");
@@ -114,6 +115,7 @@ export default function MapScreen() {
   const [isNavigating, setIsNavigating] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isMapCentered, setIsMapCentered] = useState(true);
+  // const [isPanelOpen, setIsPanelOpen] = useState(true); // <-- REMOVIDO
 
   useEffect(() => {
     const carregarDadosIniciais = async () => {
@@ -250,8 +252,12 @@ export default function MapScreen() {
 
   function handleDeliveryPress(delivery: Delivery) {
     setIsNavigating(false);
-    setSelectedDelivery(delivery);
-    setIsMapCentered(true);
+    if (selectedDelivery?.id === delivery.id) {
+      setSelectedDelivery(null);
+    } else {
+      setSelectedDelivery(delivery);
+      setIsMapCentered(true);
+    }
   }
 
   async function handleUpdateStatus(
@@ -371,6 +377,8 @@ export default function MapScreen() {
         )}
       </MapView>
 
+      {/* BlurView REMOVIDO DAQUI */}
+
       <AppHeader logoSource={appLogo} onLogout={handleLogout} />
 
       {!isMapCentered && (
@@ -386,6 +394,7 @@ export default function MapScreen() {
         onUpdateStatus={handleUpdateStatus}
         onLogout={handleLogout}
         onStartNavigation={handleStartNavigation}
+        // prop 'onPanelStateChange' REMOVIDA DAQUI
       />
     </View>
   );
@@ -394,18 +403,19 @@ export default function MapScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   map: { ...StyleSheet.absoluteFillObject },
+  // estilo 'mapBlur' REMOVIDO DAQUI
   navigationIcon: { width: 30, height: 30 },
   centerButton: {
     position: "absolute",
     bottom: "40%",
     right: 20,
-    backgroundColor: "white",
-    borderRadius: 30,
+    backgroundColor: Platform.OS === "ios" ? "rgba(255,255,255,0.85)" : "white",
+    borderRadius: Platform.OS === "ios" ? 20 : 30,
     padding: 15,
     elevation: 8,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
+    shadowOpacity: Platform.OS === "ios" ? 0.15 : 0.25,
     shadowRadius: 3.84,
   },
 });

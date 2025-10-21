@@ -6,7 +6,6 @@ export interface Item {
   location: string;
 }
 
-
 export type Delivery = {
   id: string;
   motorista_id: string;

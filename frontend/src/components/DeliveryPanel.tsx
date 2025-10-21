@@ -1,7 +1,7 @@
-// frontend/src/components/DeliveryPanel.tsx (VERSÃO FINAL CORRIGIDA)
+// frontend/src/components/DeliveryPanel.tsx
 
 import React, { useMemo, useRef, useState } from "react";
-import { StyleSheet } from "react-native";
+import { StyleSheet, View } from "react-native";
 import BottomSheet from "@gorhom/bottom-sheet";
 import DeliveriesList from "./DeliveriesList";
 import { Delivery } from "../types";
@@ -14,6 +14,9 @@ type DeliveryPanelProps = {
   onLogout: () => void;
   onStartNavigation: () => void;
 };
+
+// Handle Vazio Removido
+// const EmptyHandle = () => <View />; // Não mais necessário
 
 export default function DeliveryPanel({
   deliveriesData,
@@ -29,7 +32,9 @@ export default function DeliveryPanel({
 
   const handleItemClick = (delivery: Delivery) => {
     onDeliveryPress(delivery);
-    bottomSheetRef.current?.snapToIndex(1);
+    if (activeSnapIndex === 0 && selectedDelivery?.id !== delivery.id) {
+      bottomSheetRef.current?.snapToIndex(1);
+    }
   };
 
   const handleStartAndCollapse = () => {
@@ -43,8 +48,11 @@ export default function DeliveryPanel({
       index={1}
       snapPoints={snapPoints}
       onChange={(index) => setActiveSnapIndex(index)}
-      handleIndicatorStyle={{ backgroundColor: "#010409ff", width: 50 }}
-      backgroundStyle={styles.bottomSheetBackground}
+      // *** CORREÇÃO: Remove completamente o handle e sua área ***
+      handleComponent={() => null}
+      // handleIndicatorStyle removido
+      // containerStyle removido
+      backgroundStyle={styles.panelBackground} // Fundo cinza claro
     >
       <DeliveriesList
         data={deliveriesData}
@@ -59,17 +67,11 @@ export default function DeliveryPanel({
 }
 
 const styles = StyleSheet.create({
-  bottomSheetBackground: {
-    backgroundColor: "white",
+  panelBackground: {
+    backgroundColor: "rgba(230, 230, 230, 0.92)",
     borderTopLeftRadius: 40,
     borderTopRightRadius: 40,
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: -4,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 6.0,
-    elevation: 30,
+    // *** Adicionado overflow hidden aqui também para garantir o corte no topo ***
+    overflow: "hidden",
   },
 });
