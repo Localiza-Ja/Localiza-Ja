@@ -9,7 +9,7 @@
 
 // --- 1. CONFIGURAÇÕES PRINCIPAIS ---
 const char* ssid = "123";               // SUBSTITUA PELO SEU SSID
-const char* password = "********";      // SUBSTITUA PELA SUA SENHA
+const char* password = "çççççççç";      // SUBSTITUA PELA SUA SENHA
 
 // IDs que o seu backend espera
 const char* motoristaId = "a1b2c3d4-e5f6-7890-1234-567890abcdef";
