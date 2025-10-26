@@ -137,9 +137,30 @@ void setup() {
   delay(1000);
   Serial.println("\nInicializando ESP32 com GPS...");
 
-  // Inicializa GPS
+  // Inicializa GPS — ajuste automático de baud rate se necessário
   SerialGPS.begin(9600, SERIAL_8N1, RXD2, TXD2);
-  Serial.println("GPS iniciado.");
+  Serial.println("GPS iniciado em 9600 baud.");
+
+  delay(2000); // dá tempo para o módulo inicializar
+
+// Teste de recepção de dados NMEA
+  Serial.println("Verificando comunicação com o GPS...");
+  unsigned long startTest = millis();
+  bool gpsRespondendo = false;
+
+  while (millis() - startTest < 5000) { // testa por 5 segundos
+    if (SerialGPS.available()) {
+      char c = SerialGPS.read();
+      Serial.write(c);
+      gpsRespondendo = true;
+    }
+  }
+
+  if (gpsRespondendo) {
+    Serial.println("\n✅ GPS está enviando dados NMEA!");
+  } else {
+    Serial.println("\n⚠️ Nenhum dado recebido. Tente outro baud rate (4800 ou 38400).");
+  }
 
   // Conecta WiFi
   WiFi.mode(WIFI_STA);
@@ -165,6 +186,19 @@ void setup() {
 }
 
 void loop() {
+  while (SerialGPS.available() > 0) {
+    gps.encode(SerialGPS.read());
+  }
+
+  if (gps.location.isUpdated()) {
+  Serial.printf("Lat: %.6f | Lon: %.6f | Satélites: %d\n",
+                gps.location.lat(),
+                gps.location.lng(),
+                gps.satellites.value());
+  } else if (gps.charsProcessed() > 500 && gps.satellites.value() == 0) {
+    Serial.println("⚠️ GPS ainda sem fix. Aguarde alguns minutos em local aberto...");
+  }
+ 
   static unsigned long lastSend = 0;
   const unsigned long sendInterval = 30000;
 
@@ -173,5 +207,5 @@ void loop() {
     lastSend = millis();
   }
 
-  delay(10);
+  delay(60000);
 }
