@@ -3,12 +3,14 @@
 
 # Ignorar diretório do ambiente virtual
 localiza_ja/
+venv/
 
 # Ignorar arquivos gerados pelo Python
 *.pyc
 __pycache__/
 *.pyo
 *.pyd
+.pytest_cache/
 
 # Ignorar arquivos de IDEs (exemplo para VSCode)
 .vscode/
@@ -16,3 +18,5 @@ __pycache__/
 # Ignorar logs e arquivos temporários
 *.log
 *.tmp
+.DS_Store
+*.db

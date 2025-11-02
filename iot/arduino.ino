@@ -2,157 +2,210 @@
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
+#include <TinyGPSPlus.h>
+#include <HardwareSerial.h>
 
 #define SERIAL_BAUD 115200
 
 // --- 1. CONFIGURAÇÕES PRINCIPAIS ---
 const char* ssid = "123";               // SUBSTITUA PELO SEU SSID
-const char* password = "********";      // SUBSTITUA PELA SUA SENHA
+const char* password = "çççççççç";      // SUBSTITUA PELA SUA SENHA
 
-// IDs que o seu backend espera (UUIDs válidos)
-// Estes IDs são obrigatórios para o seu modelo 'Localizacao'
-const char* motoristaId = "a1b2c3d4-e5f6-7890-1234-567890abcdef"; // Exemplo UUID
-const char* entregaId = "f0e9d8c7-b6a5-4321-fedc-ba9876543210";   // Exemplo UUID
+// IDs que o seu backend espera
+const char* motoristaId = "a1b2c3d4-e5f6-7890-1234-567890abcdef";
+const char* entregaId = "f0e9d8c7-b6a5-4321-fedc-ba9876543210";
 
 // Endereço e Porta do Servidor Flask
-const char* BACKEND_IP = "192.168.168.100";
+const char* BACKEND_IP = "10.75.10.144";
 const uint16_t BACKEND_PORT = 5000;
-const char* ENDPOINT_PATH = "/localizacoes/iot"; // Rota no Flask para receber o POST
+const char* ENDPOINT_PATH = "/localizacoes/iot";
 
-// --- 2. FUNÇÕES AUXILIARES DE TESTE (DADOS ESTÁTICOS) ---
+// --- 2. CONFIGURAÇÃO DO GPS ---
+TinyGPSPlus gps;
+HardwareSerial SerialGPS(1); // Usando UART1 do ESP32
+#define RXD2 16  // Pino RX do ESP32 conectado ao TX do GPS
+#define TXD2 17  // Pino TX do ESP32 conectado ao RX do GPS
 
-// **SIMULAÇÃO**: Retorna coordenadas estáticas (para teste)
-void getGpsCoordinates(float &lat, float &lon) {
-    // Coordenadas simuladas (Exemplo: São Paulo)
-    lat = -23.5678901; 
-    lon = -46.6789012; 
-    // Em produção, esta função leria um módulo GPS (e.g., NEO-6M)
-}
+// --- 3. FUNÇÕES AUXILIARES ---
 
-// **SIMULAÇÃO**: Retorna um timestamp estático no formato ISO 8601 exigido pelo backend
-String getNtpTimeFormatted() {
-    // O backend (PostgreSQL/SQLAlchemy) espera este formato: YYYY-MM-DD hh:mm:ss
-    return "2025-10-01 10:30:00"; 
-    // Em produção, esta função usaria NTP ou um RTC (Real-Time Clock)
-}
-
-// Compõe URL completa
 String backendUrl() {
-    return String("http://") + BACKEND_IP + ":" + String(BACKEND_PORT) + String(ENDPOINT_PATH);
+  return String("http://") + BACKEND_IP + ":" + String(BACKEND_PORT) + String(ENDPOINT_PATH);
 }
 
-// --- 3. FUNÇÃO PRINCIPAL DE ENVIO ---
+// Função que lê coordenadas reais do GPS
+bool getGpsCoordinates(float &lat, float &lon) {
+  while (SerialGPS.available() > 0) {
+    gps.encode(SerialGPS.read());
+  }
 
+  if (gps.location.isUpdated()) {
+    lat = gps.location.lat();
+    lon = gps.location.lng();
+    return true;
+  }
+  return false;
+}
+
+// Função que gera timestamp real no formato YYYY-MM-DD HH:MM:SS
+String getFormattedTime() {
+  if (gps.date.isValid() && gps.time.isValid()) {
+    char buffer[25];
+    snprintf(buffer, sizeof(buffer), "%04d-%02d-%02d %02d:%02d:%02d",
+             gps.date.year(),
+             gps.date.month(),
+             gps.date.day(),
+             gps.time.hour(),
+             gps.time.minute(),
+             gps.time.second());
+    return String(buffer);
+  } else {
+    // Retorno alternativo se GPS ainda não tiver hora válida
+    time_t now;
+    struct tm timeinfo;
+    if (!getLocalTime(&timeinfo)) {
+      return "0000-00-00 00:00:00";
+    }
+    char buffer[25];
+    strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", &timeinfo);
+    return String(buffer);
+  }
+}
+
+// --- 4. FUNÇÃO PRINCIPAL DE ENVIO ---
 void sendLocation() {
-    if (WiFi.status() != WL_CONNECTED) {
-        Serial.println("WiFi nao conectado — pulando envio.");
-        return;
-    }
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("WiFi nao conectado — pulando envio.");
+    return;
+  }
 
-    HTTPClient http;
-    String url = backendUrl();
-    Serial.print("Enviando POST para: ");
-    Serial.println(url);
+  float currentLat, currentLon;
+  bool hasFix = getGpsCoordinates(currentLat, currentLon);
 
-    http.begin(url);
-    // Ajustado para 15s de timeout.
-    http.setTimeout(15000); 
-    http.addHeader("Content-Type", "application/json");
+  if (!hasFix) {
+    Serial.println("Sem sinal GPS — aguardando coordenadas válidas.");
+    return;
+  }
 
-    // 1. Obter dados estáticos (coordenadas e timestamp)
-    float currentLat, currentLon;
-    getGpsCoordinates(currentLat, currentLon);
-    String dataHora = getNtpTimeFormatted();
+  String dataHora = getFormattedTime();
+  HTTPClient http;
+  String url = backendUrl();
+  Serial.print("Enviando POST para: ");
+  Serial.println(url);
 
-    // 2. Buffer para JSON: 400 bytes é seguro para dois UUIDs, coordenadas e timestamp.
-    StaticJsonDocument<400> doc; 
+  http.begin(url);
+  http.setTimeout(15000);
+  http.addHeader("Content-Type", "application/json");
 
-    // 3. Incluir TODOS os campos exigidos pelo modelo 'Localizacao' do backend
-    doc["entrega_id"] = entregaId;
-    doc["motorista_id"] = motoristaId;
-    doc["latitude"] = currentLat;
-    doc["longitude"] = currentLon;
-    doc["data_hora"] = dataHora; // Enviando o timestamp
+  StaticJsonDocument<400> doc;
+  doc["entrega_id"] = entregaId;
+  doc["motorista_id"] = motoristaId;
+  doc["latitude"] = currentLat;
+  doc["longitude"] = currentLon;
+  doc["data_hora"] = dataHora;
 
-    String payload;
-    // O tamanho do payload será menor que 400, mas o buffer é um limite.
-    size_t size = serializeJson(doc, payload);
+  String payload;
+  serializeJson(doc, payload);
 
-    Serial.print("Payload (");
-    Serial.print(size);
-    Serial.print(" bytes): ");
-    Serial.println(payload);
+  Serial.print("Payload: ");
+  Serial.println(payload);
 
-    // 4. Envio HTTP
-    int httpCode = http.POST(payload);
+  int httpCode = http.POST(payload);
 
-    if (httpCode > 0) {
-        if (httpCode >= 200 && httpCode < 300) {
-            // Sucesso (2xx)
-            String response = http.getString();
-            Serial.print("HTTP Code: ");
-            Serial.println(httpCode);
-            Serial.print("Resposta servidor (Sucesso): ");
-            Serial.println(response);
-        } else {
-            // Erro do Servidor (4xx, 5xx)
-            Serial.print("HTTP Code (Erro Servidor): ");
-            Serial.println(httpCode);
-            Serial.print("Resposta servidor (Detalhes): ");
-            Serial.println(http.getString());
-        }
+  if (httpCode > 0) {
+    if (httpCode >= 200 && httpCode < 300) {
+      Serial.print("Sucesso (");
+      Serial.print(httpCode);
+      Serial.println(").");
+      Serial.println(http.getString());
     } else {
-        // Erro de Conexão (Timeout, DNS, etc.)
-        Serial.print("Erro ao enviar HTTP. Código: ");
-        Serial.println(httpCode);
-        Serial.print("Descrição: ");
-        Serial.println(http.errorToString(httpCode));
+      Serial.print("Erro servidor (");
+      Serial.print(httpCode);
+      Serial.println("):");
+      Serial.println(http.getString());
     }
+  } else {
+    Serial.print("Falha HTTP: ");
+    Serial.println(http.errorToString(httpCode));
+  }
 
-    http.end();
+  http.end();
 }
 
-// --- 4. ARDUINO SETUP E LOOP ---
-
+// --- 5. SETUP E LOOP ---
 void setup() {
-    Serial.begin(SERIAL_BAUD);
+  Serial.begin(SERIAL_BAUD);
+  delay(1000);
+  Serial.println("\nInicializando ESP32 com GPS...");
+
+  // Inicializa GPS — ajuste automático de baud rate se necessário
+  SerialGPS.begin(9600, SERIAL_8N1, RXD2, TXD2);
+  Serial.println("GPS iniciado em 9600 baud.");
+
+  delay(2000); // dá tempo para o módulo inicializar
+
+// Teste de recepção de dados NMEA
+  Serial.println("Verificando comunicação com o GPS...");
+  unsigned long startTest = millis();
+  bool gpsRespondendo = false;
+
+  while (millis() - startTest < 5000) { // testa por 5 segundos
+    if (SerialGPS.available()) {
+      char c = SerialGPS.read();
+      Serial.write(c);
+      gpsRespondendo = true;
+    }
+  }
+
+  if (gpsRespondendo) {
+    Serial.println("\n✅ GPS está enviando dados NMEA!");
+  } else {
+    Serial.println("\n⚠️ Nenhum dado recebido. Tente outro baud rate (4800 ou 38400).");
+  }
+
+  // Conecta WiFi
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid, password);
+  Serial.print("Conectando ao WiFi");
+  unsigned long startAttemptTime = millis();
+
+  while (WiFi.status() != WL_CONNECTED && millis() - startAttemptTime < 20000) {
+    Serial.print(".");
     delay(500);
+  }
+
+  if (WiFi.status() == WL_CONNECTED) {
     Serial.println();
-    Serial.println("ESP32 iniciando...");
+    Serial.print("WiFi conectado. IP: ");
+    Serial.println(WiFi.localIP());
+  } else {
+    Serial.println("\nFalha ao conectar no WiFi.");
+  }
 
-    WiFi.mode(WIFI_STA);
-    WiFi.begin(ssid, password);
-
-    Serial.print("Conectando ao WiFi");
-    unsigned long t0 = millis();
-    // Tenta conectar por no máximo 20 segundos
-    while (WiFi.status() != WL_CONNECTED && millis() - t0 < 20000) {
-        Serial.print('.');
-        delay(500);
-    }
-    
-    if (WiFi.status() == WL_CONNECTED) {
-        Serial.println();
-        Serial.print("WiFi OK. IP: ");
-        Serial.println(WiFi.localIP());
-    } else {
-        Serial.println();
-        Serial.println("Falha ao conectar no WiFi (timeout). Verifique SSID/senha.");
-    }
+  // Sincroniza hora via NTP (caso GPS ainda não tenha fix)
+  configTime(-3 * 3600, 0, "pool.ntp.org");
 }
 
 void loop() {
-    // Variável 'last' deve ser estática para manter o valor entre chamadas de loop()
-    static unsigned long lastSend = 0; 
-    // Intervalo de 10 segundos (10000 ms)
-    const unsigned long sendInterval = 30000; 
+  while (SerialGPS.available() > 0) {
+    gps.encode(SerialGPS.read());
+  }
 
-    if (millis() - lastSend >= sendInterval) {
-        // CHAMADA CORRIGIDA para a função sendLocation()
-        sendLocation(); 
-        lastSend = millis();
-    }
+  if (gps.location.isUpdated()) {
+  Serial.printf("Lat: %.6f | Lon: %.6f | Satélites: %d\n",
+                gps.location.lat(),
+                gps.location.lng(),
+                gps.satellites.value());
+  } else if (gps.charsProcessed() > 500 && gps.satellites.value() == 0) {
+    Serial.println("⚠️ GPS ainda sem fix. Aguarde alguns minutos em local aberto...");
+  }
+ 
+  static unsigned long lastSend = 0;
+  const unsigned long sendInterval = 30000;
 
-    // Pequeno delay no final do loop para evitar watchdog timer
-    delay(10); 
+  if (millis() - lastSend >= sendInterval) {
+    sendLocation();
+    lastSend = millis();
+  }
+
+  delay(60000);
 }

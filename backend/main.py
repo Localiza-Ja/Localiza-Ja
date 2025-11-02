@@ -2,26 +2,133 @@
 Módulo: main.py
 Descrição: Ponto de entrada da aplicação Flask, inicializa a API e registra os endpoints.
 Autor: Rafael dos Santos Giorgi
-Data: 31/08/2025
+Data: 01/10/2025
+
+NOTE: A blacklist é mantida em memória localmente; considere Redis em produção.
+TODO: Desativar modo de depuração (debug=False) em produção.
 """
 
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from flask_restful import Api
-from app.db import create_app
+from app.db import create_app, db
 from flask_jwt_extended import JWTManager
-from app.routes import Sensor_rote
-from app.routes import Ping
+from app.routes import Ping, UsuarioResource, LoginResource, LogoutResource, SessionResource, EntregaResource, EntregaPorNumeroResource, EntregaPorMotoristaResource, EntregaStatusResource, LocalizacaoResource, LocalizacaoIoTResource, LocalizacaoEntregaResource, LocalizacaoMotoristaResource
+from app.utils import check_if_token_in_blacklist
 from dotenv import load_dotenv
 import os
+from flask_babel import Babel
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+from datetime import timedelta
+from flask_migrate import Migrate
 
 load_dotenv()
 app = create_app()
 api = Api(app)
 jwt = JWTManager(app)
+babel = Babel(app)
+limiter = Limiter(
+    app=app,
+    key_func=get_remote_address,
+    default_limits=["100 per hour"]
+)
+migrate = Migrate(app, db)
+
+def decorated_check_if_token_in_blacklist(jwt_header, jwt_payload):
+    """
+    Verifica se o token JWT está na blacklist.
+
+    Args:
+        jwt_header (dict): Cabeçalho do token JWT.
+        jwt_payload (dict): Payload do token JWT.
+
+    Returns:
+        bool: True se o token está na blacklist, False caso contrário.
+
+    Raises:
+        KeyError: Se 'jti' não estiver presente no payload.
+    """
+    if 'jti' not in jwt_payload:
+        raise KeyError("Token JWT inválido: 'jti' não encontrado.")
+    return check_if_token_in_blacklist(jwt_payload)
+
+app.config["JWT_SECRET_KEY"] = os.getenv('JWT_SECRET_KEY')
+if not app.config["JWT_SECRET_KEY"]:
+    raise ValueError("JWT_SECRET_KEY não configurada no ambiente.")
+app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(days=7)
+app.config["BABEL_DEFAULT_LOCALE"] = 'pt_BR'
+app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024
+app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv('DATABASE_URL')
+if not app.config["SQLALCHEMY_DATABASE_URI"]:
+    raise ValueError("DATABASE_URL não configurada no ambiente.")
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+app.config["UPLOAD_FOLDER"] = os.path.join(os.path.dirname(__file__), 'uploads')
+os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
+
+@jwt.token_in_blocklist_loader
+def token_in_blocklist_callback(jwt_header, jwt_payload):
+    """
+    Callback para verificar se o token está na blacklist.
+
+    Args:
+        jwt_header (dict): Cabeçalho do token JWT.
+        jwt_payload (dict): Payload do token JWT.
+
+    Returns:
+        bool: True se o token está na blacklist, False caso contrário.
+    """
+    try:
+        return decorated_check_if_token_in_blacklist(jwt_header, jwt_payload)
+    except KeyError as e:
+        return jsonify({"error": str(e), "status": False}), 400
+
+def get_locale():
+    """
+    Determina o idioma preferido com base nos cabeçalhos de aceitação do cliente.
+
+    Returns:
+        str: Código do idioma (ex.: 'pt_BR', 'en_US') que melhor corresponde.
+
+    NOTE: Retorna 'pt_BR' como padrão se nenhum idioma for compatível.
+    """
+    return request.accept_languages.best_match(['pt_BR', 'en_US'], default='pt_BR')
+
+@app.errorhandler(Exception)
+def handle_exception(e):
+    """
+    Trata exceções não capturadas na aplicação.
+
+    Args:
+        e (Exception): Exceção levantada.
+
+    Returns:
+        tuple: JSON com mensagem de erro e status 500 (Internal Server Error).
+
+    NOTE: Logar o erro em um sistema de logging em produção para rastreamento.
+    """
+    return jsonify({"message": f"Erro interno no servidor: {str(e)}", "status": False}), 500
 
 api.add_resource(Ping, '/ping')
-api.add_resource(Sensor_rote, '/sensor_api', '/sensor_api/<string:sensor_id>')
+api.add_resource(UsuarioResource, '/usuarios', '/usuarios/<uuid:user_id>')
+api.add_resource(LoginResource, '/usuarios/login')
+api.add_resource(LogoutResource, '/usuarios/logout')
+api.add_resource(SessionResource, '/usuarios/session')
+api.add_resource(EntregaResource, '/entregas', '/entregas/<uuid:entrega_id>')
+api.add_resource(EntregaPorNumeroResource, '/entregas/numero_pedido/<string:numero_pedido>')
+api.add_resource(EntregaPorMotoristaResource, '/entregas/motorista/<uuid:motorista_id>')
+api.add_resource(EntregaStatusResource, '/entregas/<uuid:entrega_id>/status')
+api.add_resource(LocalizacaoResource, '/localizacoes', '/localizacoes/<uuid:loc_id>')
+api.add_resource(LocalizacaoIoTResource, '/localizacoes/iot')
+api.add_resource(LocalizacaoEntregaResource, '/localizacoes/entrega/<uuid:entrega_id>')
+api.add_resource(LocalizacaoMotoristaResource, '/localizacoes/motorista/<uuid:motorista_id>')
+
+# Bloco para registrar o comando 'seed-db' (POSIÇÃO CORRETA)
+@app.cli.command("seed-db")
+def seed_db_command():
+    """Popula o banco de dados com dados de teste."""
+    from seed import seed_data # Adicione o import aqui dentro para evitar importação circular
+    seed_data()
+
 
 if __name__ == "__main__":
-    # TODO: Desativar modo de depuração (debug=False) em produção.
     app.run(host='0.0.0.0', debug=True)
