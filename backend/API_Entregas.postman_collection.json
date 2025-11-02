@@ -1,11 +1,11 @@
 {
 	"info": {
-		"_postman_id": "7a7ce6ff-4800-46bd-9f94-1c59b968830f",
-		"name": "API de Gerenciamento de Entregas",
+		"_postman_id": "0ce39759-f1cc-4c13-b4e8-39af3158cb1a",
+		"name": "API de Gerenciamento de Entregas - Localiza Já",
 		"description": "Coleção de testes para a API de Gerenciamento de Entregas em http://localhost:5000, organizada e ajustada com base na documentação da API.",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
 		"_exporter_id": "29984139",
-		"_collection_link": "https://localiza-j.postman.co/workspace/Localiza-J%C3%A1~62fe4f7c-f73b-4f03-b660-997190000456/collection/29984139-7a7ce6ff-4800-46bd-9f94-1c59b968830f?action=share&source=collection_link&creator=29984139"
+		"_collection_link": "https://localiza-j.postman.co/workspace/Localiza-J%C3%A1~62fe4f7c-f73b-4f03-b660-997190000456/collection/29984139-0ce39759-f1cc-4c13-b4e8-39af3158cb1a?action=share&source=collection_link&creator=29984139"
 	},
 	"item": [
 		{

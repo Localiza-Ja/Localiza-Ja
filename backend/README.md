@@ -91,9 +91,9 @@ Crie um arquivo `.env` na raiz do projeto com as seguintes variáveis (existe um
    - Inicialize as migrações:
 
      ```
-     export FLASK_APP=main.py # No Windows: set FLASK_APP=main.py
+     export FLASK_APP=main.py # No Windows: set FLASK_APP=main.py ou no PowerShell $env:FLASK_APP = "main.py"
      flask db init  # Apenas na primeira vez
-     flask db migrate
+     flask db migrate -m "Criação inicial das tabelas"
      flask db upgrade
      ```
 
@@ -632,6 +632,54 @@ Os endpoints são organizados por módulo. Todos os endpoints protegidos requere
 #### PUT /entregas/<entrega_id>/status
 
 - **Descrição**: Atualiza apenas o status de uma entrega (com campos condicionais).
+- **STATUS**:
+
+### pendente
+
+Estado inicial da entrega (não iniciada).
+Nenhuma modificação extra além de confirmar o status.
+**Ação:** Atualizar apenas o status da entrega, se necessário.
+
+### em_rota
+
+Indica o início da entrega.
+**Ações obrigatórias:**
+  1. Atualizar o status da entrega para em_rota;
+  2. Criar ou atualizar um registro na tabela localizacao:
+     * motorista_id = motorista da entrega;
+     * entrega_id = id da entrega;
+     * latitude e longitude vindos do corpo da requisição;
+     * data_hora = datetime.now() caso não informado;
+  3. Registrar inicio_rota se o campo existir (ou adicionar via observação).
+
+### entregue
+
+Entrega finalizada com sucesso.
+**Ações obrigatórias:**
+  1. Atualizar status da entrega para entregue;
+  2. Registrar nome_recebido e foto_prova (obrigatórios);
+  3. Associar entrega_id à localizacao do motorista;
+  4. Gravar data/hora de entrega (atualizado_em é automático via SQLAlchemy);
+  5. Retornar JSON completo da entrega.
+
+### cancelada
+
+Entrega encerrada sem sucesso por cancelamento.
+**Ações obrigatórias:**
+  1. Atualizar status para cancelada;
+  2. Registrar motivo e foto_prova (obrigatórios);
+  3. Associar entrega_id à localizacao do motorista;
+  4. Atualizar timestamps.
+
+### nao_entregue
+
+Entrega não foi concluída por outro motivo (ex.: cliente ausente).
+**Ações obrigatórias:**
+  1. Atualizar status para nao_entregue;
+  2. Registrar motivo e foto_prova (obrigatórios);
+  3. Associar entrega_id à localizacao do motorista;
+  4. Atualizar timestamps.
+
 - **Parâmetros de Requisição (Path)**: `entrega_id` (UUID, **obrigatório**).
 - **Parâmetros de Requisição (Body)**:
 
@@ -839,23 +887,25 @@ Os endpoints são organizados por módulo. Todos os endpoints protegidos requere
 - **Descrição**: Cria uma localização simplificada via IoT (sem associações).
 - **Parâmetros de Requisição (Body)**:
 
-| Nome        | Tipo    | Obrigatório | Descrição               |
-| ----------- | ------- | ----------- | ----------------------- |
-| `latitude`  | numeric | **Sim**     | Latitude (-90 a 90).    |
-| `longitude` | numeric | **Sim**     | Longitude (-180 a 180). |
+| Nome           | Tipo    | Obrigatório | Descrição        |
+| -------------- | ------- | ----------- | ---------------- |
+| `motorista_id` | UUID    | **Sim**     | ID do motorista. |
+| `latitude`     | numeric | **Sim**     | Latitude.        |
+| `longitude`    | numeric | **Sim**     | Longitude.       |
 
 - **Headers**: Nenhum (endpoint público).
 - **Exemplo de Requisição cURL**:
   ```
   curl -X POST http://localhost:5000/localizacoes/iot \
   -H "Content-Type: application/json" \
-  -d '{"latitude": -23.55, "longitude": -46.63}'
+  -d '{"motorista_id": "uuid-motorista", "latitude": -23.55, "longitude": -46.63}'
   ```
 - **Resposta JSON de Sucesso (201)**:
   ```json
   {
     "Localizacao": {
       "id": "uuid-string",
+      "motorista_id": "uuid-motorista",
       "latitude": -23.55,
       "longitude": -46.63,
       "data_hora": "YYYY-MM-DDTHH:MM:SS",
@@ -1064,7 +1114,7 @@ Respostas de erro incluem `status: false` e uma chave `error` (ou `message` em e
 Os testes de integração estão em `test_api.py` e usam `pytest` com fixtures para criar/deletar dados de teste, garantindo isolamento e limpeza automática. Rode os testes com:
 
 ```
-pytest test_api.py -v
+pytest ./test/test_api.py -v
 ```
 
 Os testes cobrem CRUD, autenticação e regras de negócio, executando em ordem via `pytest-order`. Certifique-se de que a API esteja rodando em `http://localhost:5000`.

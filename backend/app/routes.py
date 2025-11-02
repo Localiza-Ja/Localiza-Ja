@@ -6,7 +6,6 @@ Data: 05/10/2025
 
 NOTE: Este módulo inclui endpoints para autenticação (login/logout) e gerenciamento de sessões, além de recursos para usuários, entregas e localizações.
 TODO: Adicionar suporte a paginação em listas longas para melhor performance.
-TODO: Implementar logging de erros para monitoramento em produção.
 """
 
 from app.db import db
@@ -26,28 +25,16 @@ import string
 from flask import request, current_app
 from flask_babel import gettext
 import re
+import base64
+import logging
 
-def gerar_numero_pedido():
-    """
-    Gera um código de rastreamento aleatório com 6 caracteres (letras e números, maiúsculas).
-
-    Returns:
-        str: Código de rastreamento gerado único.
-
-    Raises:
-        RuntimeError: Se não for possível gerar um número único após várias tentativas.
-
-    NOTE: Garante unicidade verificando no banco de dados.
-    TODO: Limitar o número de tentativas para evitar loops infinitos em cenários de alta concorrência.
-    """
-    tentativas = 0
-    max_tentativas = 100
-    while tentativas < max_tentativas:
-        numero = ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(6))
-        if not Entrega.query.filter_by(numero_pedido=numero).first():
-            return numero
-        tentativas += 1
-    raise RuntimeError("Não foi possível gerar um número de pedido único após várias tentativas.")
+# Configurar logging
+logging.basicConfig(
+    filename='app.log',
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 def validar_cnh(value):
     """
@@ -150,6 +137,79 @@ def validar_range(min_value=None, max_value=None):
         return num
     return validator
 
+def validar_status():
+    """
+    Cria um validador para status possíveis de uma entrega.
+
+    Returns:
+        function: Função validadora que verifica se o valor é um status válido do enum StatusEntrega.
+    """
+    def validator(value):
+        if value is None:
+            raise ValueError("Status não pode ser nulo")
+        try:
+            return StatusEntrega(value)
+        except ValueError:
+            valid_statuses = [s.value for s in StatusEntrega]
+            raise ValueError(f"Status inválido. Valores permitidos: {valid_statuses}")
+    return validator
+
+def processar_foto_prova(foto_prova, entrega_id):
+    """
+    Processa a foto de prova, suportando base64 ou nome de arquivo.
+
+    Args:
+        foto_prova (str): Dados da foto (base64 ou nome do arquivo).
+        entrega_id: indetificação da entrega para salvar o arquivo com o mesmo nome da entrega para busca depois
+    Returns:
+        str: Nome do arquivo salvo.
+
+    Raises:
+        ValueError: Se o formato, tamanho ou existência do arquivo for inválido.
+    """
+    if foto_prova.startswith('data:image'):
+        header, data = foto_prova.split(',', 1)
+        mime_type = header.split(';')[0].split('/')[-1]
+        allowed_extensions = ['jpeg', 'jpg', 'png']
+        if mime_type not in allowed_extensions:
+            raise ValueError(gettext("Formato de imagem inválido. Permitidos: {}").format(allowed_extensions))
+        binary_data = base64.b64decode(data)
+        if len(binary_data) > 5 * 1024 * 1024:
+            raise ValueError(gettext("Arquivo de imagem excede o tamanho máximo de 5MB."))
+        
+        filename = secure_filename(f"{entrega_id}.{mime_type}")
+        filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
+        with open(filepath, 'wb') as f:
+            f.write(binary_data)
+        return filename
+    else:
+        filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], secure_filename(foto_prova))
+        if not os.path.exists(filepath):
+            raise ValueError(gettext("Arquivo de foto_prova não encontrado."))
+        ext = os.path.splitext(foto_prova)[1].lower().lstrip('.')
+        if ext not in ['jpeg', 'jpg', 'png']:
+            raise ValueError(gettext("Extensão de arquivo inválida. Permitidos: jpeg, jpg, png"))
+        return None;
+
+def gerar_numero_pedido():
+    """
+    Gera um código de rastreamento aleatório com 6 caracteres (letras e números, maiúsculas).
+
+    Returns:
+        str: Código de rastreamento gerado único.
+
+    Raises:
+        RuntimeError: Se não for possível gerar um número único após várias tentativas.
+    """
+    tentativas = 0
+    max_tentativas = 100
+    while tentativas < max_tentativas:
+        numero = ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(6))
+        if not Entrega.query.filter_by(numero_pedido=numero).first():
+            return numero
+        tentativas += 1
+    raise RuntimeError("Não foi possível gerar um número de pedido único após várias tentativas.")
+
 class Ping(Resource):
     def get(self):
         """
@@ -158,6 +218,7 @@ class Ping(Resource):
         Returns:
             tuple: JSON com mensagem de sucesso, 'pong' verdadeiro e 'status' verdadeiro (status 200).
         """
+        logger.info("Ping endpoint acessado")
         return {"pong": True, "message": gettext("API está no ar com sucesso."), "status": True}, 200
 
 class LoginResource(Resource):
@@ -179,34 +240,26 @@ class LoginResource(Resource):
             tuple: JSON com 'error' e 'status' falso (status 401) se as credenciais forem inválidas.
             tuple: JSON com 'error' e 'status' falso (status 400) se os dados forem inválidos.
             tuple: JSON com 'message' e 'status' falso (status 500) em caso de erro interno.
-
-        Raises:
-            ValueError: Se os dados de entrada forem inválidos.
-            DataError: Se ocorrer erro de dados no banco.
-            Exception: Para erros internos gerais.
-
-        NOTE: Este endpoint não exige autenticação prévia.
-        TODO: Implementar limite de tentativas de login para prevenir ataques de força bruta.
-        TODO: Adicionar suporte a autenticação multi-fator em futuras versões.
         """
         try:
             dados = LoginResource.args.parse_args()
             usuario = Usuario.query.filter_by(cnh=dados['cnh'], placa_veiculo=dados['placa_veiculo']).first()
             if not usuario:
+                logger.warning(f"Tentativa de login falha com CNH {dados['cnh']}")
                 return {"error": gettext("Credenciais inválidas. Verifique CNH e placa."), "status": False}, 401
             access_token = create_access_token(identity=str(usuario.id))
+            logger.info(f"Login bem-sucedido para usuário {usuario.id}")
             return {
                 "access_token": access_token,
                 "message": gettext("Login realizado com sucesso."),
                 "status": True
             }, 200
         except ValueError as e:
+            logger.error(f"Erro de validação no login: {str(e)}")
             return {"error": f"Dados inválidos: {str(e)}", "status": False}, 400
-        except DataError as e:
-            return {"error": f"Erro de dados: {str(e)}", "status": False}, 400
         except Exception as e:
-            # NOTE: Em produção, logar o stack trace para depuração sem expor ao usuário.
-            return {"message": f"Erro interno no servidor. Contate o suporte: {str(e)}", "status": False}, 500
+            logger.error(f"Erro interno no login: {str(e)}")
+            return {"message": f"Erro interno no servidor: {str(e)}", "status": False}, 500
 
 class LogoutResource(Resource):
     @jwt_required()
@@ -218,49 +271,38 @@ class LogoutResource(Resource):
             tuple: JSON com mensagem de sucesso e 'status' verdadeiro (status 200).
             tuple: JSON com 'error' e 'status' falso (status 400) se o token for inválido.
             tuple: JSON com 'message' e 'status' falso (status 500) em caso de erro interno.
-
-        Raises:
-            KeyError: Se 'jti' não estiver no JWT.
-            Exception: Para erros internos.
-
-        NOTE: Requer autenticação via JWT.
         """
         try:
-            jwt_data = get_jwt()
-            if 'jti' not in jwt_data:
-                return {"error": "Token JWT inválido: 'jti' não encontrado.", "status": False}, 400
-            add_to_blacklist(jwt_data['jti'])
+            jti = get_jwt()['jti']
+            add_to_blacklist(jti)
+            logger.info(f"Logout bem-sucedido para token {jti}")
             return {"message": gettext("Logout realizado com sucesso."), "status": True}, 200
         except KeyError as e:
+            logger.error(f"Erro no logout: {str(e)}")
             return {"error": f"Erro no token: {str(e)}", "status": False}, 400
         except Exception as e:
+            logger.error(f"Erro interno no logout: {str(e)}")
             return {"message": f"Erro interno no servidor: {str(e)}", "status": False}, 500
 
 class SessionResource(Resource):
     @jwt_required()
     def get(self):
         """
-        Valida o token JWT atual, retorna os dados do usuário logado e renova o token estendendo seu tempo de expiração.
+        Valida o token JWT atual, retorna os dados do usuário logado e renova o token.
 
         Returns:
-            tuple: JSON com dados do usuário, novo token de acesso, mensagem de sucesso e 'status' verdadeiro (status 200).
+            tuple: JSON com dados do usuário, novo token, mensagem de sucesso e 'status' verdadeiro (status 200).
             tuple: JSON com 'error' e 'status' falso (status 404) se o usuário não for encontrado.
             tuple: JSON com 'message' e 'status' falso (status 500) em caso de erro interno.
-
-        Raises:
-            Exception: Erros gerais (tratados pelo errorhandler global).
-
-        NOTE: O token é validado automaticamente pelo @jwt_required(), incluindo verificação de blacklist e expiração.
-              Um novo token é gerado para renovar a sessão, mantendo o identity do usuário.
         """
         try:
             user_id = get_jwt_identity()
             user = Usuario.query.get(user_id)
             if not user:
+                logger.warning(f"Usuário não encontrado na verificação de sessão: {user_id}")
                 return {"error": gettext("Usuário não encontrado."), "status": False}, 404
-
             new_token = create_access_token(identity=user_id)
-
+            logger.info(f"Sessão válida para usuário {user_id}")
             return {
                 "Usuario": user.json(),
                 "access_token": new_token,
@@ -268,11 +310,12 @@ class SessionResource(Resource):
                 "status": True
             }, 200
         except Exception as e:
+            logger.error(f"Erro na verificação de sessão: {str(e)}")
             return {"message": f"Erro interno no servidor: {str(e)}", "status": False}, 500
 
 class UsuarioResource(Resource):
     args = reqparse.RequestParser()
-    args.add_argument('nome', type=validar_max_length(255), required=True, help='Nome é obrigatório e deve ter no máximo 255 caracteres')
+    args.add_argument('nome', type=validar_max_length(255), required=True, help='Nome é obrigatório')
     args.add_argument('placa_veiculo', type=validar_placa, required=True, help='Placa inválida')
     args.add_argument('cnh', type=validar_cnh, required=True, help='CNH deve ter 11 dígitos')
     args.add_argument('telefone', type=validar_max_length(11), required=True, help='Telefone deve ter no máximo 11 dígitos')
@@ -290,22 +333,15 @@ class UsuarioResource(Resource):
 
         Returns:
             tuple: JSON com dados do usuário criado, mensagem de sucesso e 'status' verdadeiro (status 201).
-            tuple: JSON com 'error' e 'status' falso (status 400) se dados inválidos ou integridade violada (ex.: duplicidade).
+            tuple: JSON com 'error' e 'status' falso (status 400) se dados inválidos ou integridade violada.
             tuple: JSON com 'message' e 'status' falso (status 500) em caso de erro interno.
-
-        Raises:
-            ValueError: Se dados forem inválidos.
-            DataError: Erro de dados no banco.
-            IntegrityError: Violação de integridade (ex.: chave única).
-            Exception: Erros gerais.
-
-        NOTE: Não requer autenticação para criação de usuário (cadastro inicial).
         """
         try:
             dados = UsuarioResource.args.parse_args()
             usuario = Usuario(**dados)
             db.session.add(usuario)
             db.session.commit()
+            logger.info(f"Novo usuário criado: {usuario.id}")
             return {
                 "Usuario": usuario.json(),
                 "message": gettext("Usuário criado com sucesso."),
@@ -313,15 +349,15 @@ class UsuarioResource(Resource):
             }, 201
         except ValueError as e:
             db.session.rollback()
+            logger.error(f"Erro de validação ao criar usuário: {str(e)}")
             return {"error": f"Dados inválidos: {str(e)}", "status": False}, 400
-        except DataError as e:
+        except (DataError, IntegrityError) as e:
             db.session.rollback()
-            return {"error": f"Erro de dados: {str(e)}", "status": False}, 400
-        except IntegrityError as e:
-            db.session.rollback()
-            return {"error": f"Violação de integridade: Já existe um usuário com essa CNH ou placa. Detalhes: {str(e)}", "status": False}, 400
+            logger.error(f"Erro de banco ao criar usuário: {str(e)}")
+            return {"error": f"Erro de dados ou integridade: {str(e)}", "status": False}, 400
         except Exception as e:
             db.session.rollback()
+            logger.error(f"Erro interno ao criar usuário: {str(e)}")
             return {"message": f"Erro interno no servidor: {str(e)}", "status": False}, 500
 
     @jwt_required()
@@ -336,17 +372,14 @@ class UsuarioResource(Resource):
             tuple: JSON com lista ou dados do usuário, mensagem de sucesso e 'status' verdadeiro (status 200).
             tuple: JSON com 'error' e 'status' falso (status 404) se não encontrado.
             tuple: JSON com 'message' e 'status' falso (status 500) em caso de erro interno.
-
-        Raises:
-            Exception: Para erros internos.
-
-        NOTE: Requer autenticação via JWT. Para listagem, considerar permissões de admin em futuras versões.
         """
         try:
             if user_id:
                 usuario = Usuario.query.get(user_id)
                 if not usuario:
+                    logger.warning(f"Usuário não encontrado: {user_id}")
                     return {"error": f"Usuário com ID {user_id} não encontrado.", "status": False}, 404
+                logger.info(f"Usuário encontrado: {user_id}")
                 return {
                     "Usuario": usuario.json(),
                     "message": gettext("Usuário encontrado com sucesso."),
@@ -354,14 +387,14 @@ class UsuarioResource(Resource):
                 }, 200
             else:
                 usuarios = Usuario.query.all()
-                if not usuarios:
-                    return {"message": "Nenhum usuário encontrado.", "status": True, "Usuarios": []}, 200
+                logger.info("Lista de usuários retornada")
                 return {
                     "Usuarios": [u.json() for u in usuarios],
                     "message": gettext("Usuários listados com sucesso."),
                     "status": True
                 }, 200
         except Exception as e:
+            logger.error(f"Erro ao buscar usuário(s): {str(e)}")
             return {"message": f"Erro interno no servidor: {str(e)}", "status": False}, 500
 
     @jwt_required()
@@ -378,18 +411,11 @@ class UsuarioResource(Resource):
             tuple: JSON com 'error' e 'status' falso (status 404) se não encontrado.
             tuple: JSON com 'error' e 'status' falso (status 400) se dados inválidos ou integridade violada.
             tuple: JSON com 'message' e 'status' falso (status 500) em caso de erro interno.
-
-        Raises:
-            ValueError: Se dados forem inválidos.
-            IntegrityError: Violação de integridade.
-            Exception: Erros gerais.
-
-        NOTE: Requer autenticação via JWT. Atualiza apenas campos fornecidos.
-        TODO: Verificar se o usuário logado tem permissão para atualizar o ID especificado (ex.: próprio ou admin).
         """
         try:
             usuario = Usuario.query.get(user_id)
             if not usuario:
+                logger.warning(f"Usuário não encontrado para atualização: {user_id}")
                 return {"error": f"Usuário com ID {user_id} não encontrado.", "status": False}, 404
             dados = UsuarioResource.args.parse_args()
             atualizacoes = 0
@@ -400,6 +426,7 @@ class UsuarioResource(Resource):
             if atualizacoes == 0:
                 return {"error": "Nenhum campo fornecido para atualização.", "status": False}, 400
             db.session.commit()
+            logger.info(f"Usuário atualizado: {user_id}")
             return {
                 "Usuario": usuario.json(),
                 "message": gettext("Usuário atualizado com sucesso."),
@@ -407,12 +434,15 @@ class UsuarioResource(Resource):
             }, 200
         except ValueError as e:
             db.session.rollback()
+            logger.error(f"Erro de validação ao atualizar usuário: {str(e)}")
             return {"error": f"Dados inválidos: {str(e)}", "status": False}, 400
-        except IntegrityError as e:
+        except (DataError, IntegrityError) as e:
             db.session.rollback()
-            return {"error": f"Violação de integridade durante atualização: {str(e)}", "status": False}, 400
+            logger.error(f"Erro de banco ao atualizar usuário: {str(e)}")
+            return {"error": f"Erro de dados ou integridade: {str(e)}", "status": False}, 400
         except Exception as e:
             db.session.rollback()
+            logger.error(f"Erro interno ao atualizar usuário: {str(e)}")
             return {"message": f"Erro interno no servidor: {str(e)}", "status": False}, 500
 
     @jwt_required()
@@ -426,26 +456,25 @@ class UsuarioResource(Resource):
         Returns:
             tuple: JSON com mensagem de sucesso e 'status' verdadeiro (status 200).
             tuple: JSON com 'error' e 'status' falso (status 404) se não encontrado.
+            tuple: JSON com 'error' e 'status' falso (status 400) se houver dependências.
             tuple: JSON com 'message' e 'status' falso (status 500) em caso de erro interno.
-
-        Raises:
-            Exception: Para erros internos.
-
-        NOTE: Requer autenticação via JWT. Cascade deleta entregas e localizações associadas.
-        TODO: Adicionar confirmação ou soft-delete para evitar perda de dados acidental.
         """
         try:
             usuario = Usuario.query.get(user_id)
             if not usuario:
+                logger.warning(f"Usuário não encontrado para deleção: {user_id}")
                 return {"error": f"Usuário com ID {user_id} não encontrado.", "status": False}, 404
             db.session.delete(usuario)
             db.session.commit()
+            logger.info(f"Usuário deletado: {user_id}")
             return {"message": gettext("Usuário deletado com sucesso."), "status": True}, 200
         except IntegrityError as e:
             db.session.rollback()
+            logger.error(f"Erro de integridade ao deletar usuário: {str(e)}")
             return {"error": f"Não é possível deletar devido a dependências: {str(e)}", "status": False}, 400
         except Exception as e:
             db.session.rollback()
+            logger.error(f"Erro interno ao deletar usuário: {str(e)}")
             return {"message": f"Erro interno no servidor: {str(e)}", "status": False}, 500
 
 class EntregaResource(Resource):
@@ -454,8 +483,7 @@ class EntregaResource(Resource):
     args.add_argument('endereco_entrega', type=validar_endereco, required=True, help='Endereço inválido')
     args.add_argument('nome_cliente', type=validar_max_length(255), required=True, help='Nome do cliente é obrigatório')
     args.add_argument('observacao', type=validar_max_length(255), required=False, help='Observação inválida')
-    args.add_argument('foto_prova', type=validar_max_length(255), required=False, help='Foto de prova inválida')
-    args.add_argument('motivo', type=validar_max_length(255), required=False, help='Motivo inválido')
+    args.add_argument('foto_prova', type=str, required=False, help='Foto de prova inválida')
 
     @jwt_required()
     def post(self):
@@ -468,30 +496,25 @@ class EntregaResource(Resource):
                 endereco_entrega (str): Endereço de entrega.
                 nome_cliente (str): Nome do cliente.
                 observacao (str, optional): Observações.
-                foto_prova (str, optional): Caminho da foto de prova.
-                motivo (str, optional): Motivo para status não entregue ou cancelado.
+                foto_prova (str, optional): Foto de prova (base64 ou nome de arquivo).
 
         Returns:
             tuple: JSON com dados da entrega criada, mensagem de sucesso e 'status' verdadeiro (status 201).
-            tuple: JSON com 'error' e 'status' falso (status 400) se dados inválidos, motorista não encontrado ou integridade violada.
+            tuple: JSON com 'error' e 'status' falso (status 400) se dados inválidos ou motorista não encontrado.
             tuple: JSON com 'message' e 'status' falso (status 500) em caso de erro interno.
-
-        Raises:
-            ValueError: Se dados forem inválidos ou motorista não existir.
-            IntegrityError: Violação de integridade.
-            RuntimeError: Se falhar na geração do número de pedido.
-            Exception: Erros gerais.
-
-        NOTE: Gera número de pedido único automaticamente.
         """
         try:
             dados = EntregaResource.args.parse_args()
             if not Usuario.query.get(dados['motorista_id']):
+                logger.warning(f"Motorista não encontrado para entrega: {dados['motorista_id']}")
                 raise ValueError("Motorista não encontrado com o ID fornecido.")
             dados['numero_pedido'] = gerar_numero_pedido()
+            if dados['foto_prova']:
+                dados['foto_prova'] = processar_foto_prova(dados['foto_prova'])
             entrega = Entrega(**dados)
             db.session.add(entrega)
             db.session.commit()
+            logger.info(f"Nova entrega criada: {entrega.id}")
             return {
                 "Entrega": entrega.json(),
                 "message": gettext("Entrega criada com sucesso."),
@@ -499,15 +522,15 @@ class EntregaResource(Resource):
             }, 201
         except ValueError as e:
             db.session.rollback()
+            logger.error(f"Erro de validação ao criar entrega: {str(e)}")
             return {"error": f"Dados inválidos: {str(e)}", "status": False}, 400
-        except IntegrityError as e:
+        except (DataError, IntegrityError) as e:
             db.session.rollback()
-            return {"error": f"Violação de integridade: {str(e)}", "status": False}, 400
-        except RuntimeError as e:
-            db.session.rollback()
-            return {"error": f"Erro na geração do número de pedido: {str(e)}", "status": False}, 500
+            logger.error(f"Erro de banco ao criar entrega: {str(e)}")
+            return {"error": f"Erro de dados ou integridade: {str(e)}", "status": False}, 400
         except Exception as e:
             db.session.rollback()
+            logger.error(f"Erro interno ao criar entrega: {str(e)}")
             return {"message": f"Erro interno no servidor: {str(e)}", "status": False}, 500
 
     @jwt_required()
@@ -522,17 +545,14 @@ class EntregaResource(Resource):
             tuple: JSON com lista ou dados da entrega, mensagem de sucesso e 'status' verdadeiro (status 200).
             tuple: JSON com 'error' e 'status' falso (status 404) se não encontrada.
             tuple: JSON com 'message' e 'status' falso (status 500) em caso de erro interno.
-
-        Raises:
-            Exception: Para erros internos.
-
-        NOTE: Para listagem, retorna vazio se não houver entregas.
         """
         try:
             if entrega_id:
                 entrega = Entrega.query.get(entrega_id)
                 if not entrega:
+                    logger.warning(f"Entrega não encontrada: {entrega_id}")
                     return {"error": f"Entrega com ID {entrega_id} não encontrada.", "status": False}, 404
+                logger.info(f"Entrega encontrada: {entrega_id}")
                 return {
                     "Entrega": entrega.json(),
                     "message": gettext("Entrega encontrada com sucesso."),
@@ -540,14 +560,14 @@ class EntregaResource(Resource):
                 }, 200
             else:
                 entregas = Entrega.query.all()
-                if not entregas:
-                    return {"message": "Nenhuma entrega encontrada.", "status": True, "Entregas": []}, 200
+                logger.info("Lista de entregas retornada")
                 return {
                     "Entregas": [e.json() for e in entregas],
                     "message": gettext("Entregas listadas com sucesso."),
                     "status": True
                 }, 200
         except Exception as e:
+            logger.error(f"Erro ao buscar entrega(s): {str(e)}")
             return {"message": f"Erro interno no servidor: {str(e)}", "status": False}, 500
 
     @jwt_required()
@@ -557,34 +577,34 @@ class EntregaResource(Resource):
 
         Args:
             entrega_id (str): ID da entrega.
-            JSON Body: Campos a atualizar (motorista_id, endereco_entrega, nome_cliente, observacao, foto_prova, motivo).
+            JSON Body: Campos a atualizar (motorista_id, endereco_entrega, nome_cliente, observacao, foto_prova).
 
         Returns:
             tuple: JSON com dados atualizados, mensagem de sucesso e 'status' verdadeiro (status 200).
             tuple: JSON com 'error' e 'status' falso (status 404) se não encontrada.
-            tuple: JSON com 'error' e 'status' falso (status 400) se dados inválidos, sem atualizações ou integridade violada.
+            tuple: JSON com 'error' e 'status' falso (status 400) se dados inválidos ou motorista não encontrado.
             tuple: JSON com 'message' e 'status' falso (status 500) em caso de erro interno.
-
-        Raises:
-            ValueError: Se dados forem inválidos ou motorista não existir.
-            IntegrityError: Violação de integridade.
-            Exception: Erros gerais.
         """
         try:
             entrega = Entrega.query.get(entrega_id)
             if not entrega:
+                logger.warning(f"Entrega não encontrada para atualização: {entrega_id}")
                 return {"error": f"Entrega com ID {entrega_id} não encontrada.", "status": False}, 404
             dados = EntregaResource.args.parse_args()
             atualizacoes = 0
             for campo, valor in dados.items():
                 if valor is not None:
                     if campo == 'motorista_id' and not Usuario.query.get(valor):
-                        raise ValueError("Motorista não encontrado com o ID fornecido para atualização.")
+                        logger.warning(f"Motorista não encontrado para atualização de entrega: {valor}")
+                        raise ValueError("Motorista não encontrado com o ID fornecido.")
+                    if campo == 'foto_prova':
+                        valor = processar_foto_prova(valor)
                     setattr(entrega, campo, valor)
                     atualizacoes += 1
             if atualizacoes == 0:
                 return {"error": "Nenhum campo fornecido para atualização.", "status": False}, 400
             db.session.commit()
+            logger.info(f"Entrega atualizada: {entrega_id}")
             return {
                 "Entrega": entrega.json(),
                 "message": gettext("Entrega atualizada com sucesso."),
@@ -592,12 +612,15 @@ class EntregaResource(Resource):
             }, 200
         except ValueError as e:
             db.session.rollback()
+            logger.error(f"Erro de validação ao atualizar entrega: {str(e)}")
             return {"error": f"Dados inválidos: {str(e)}", "status": False}, 400
-        except IntegrityError as e:
+        except (DataError, IntegrityError) as e:
             db.session.rollback()
-            return {"error": f"Violação de integridade durante atualização: {str(e)}", "status": False}, 400
+            logger.error(f"Erro de banco ao atualizar entrega: {str(e)}")
+            return {"error": f"Erro de dados ou integridade: {str(e)}", "status": False}, 400
         except Exception as e:
             db.session.rollback()
+            logger.error(f"Erro interno ao atualizar entrega: {str(e)}")
             return {"message": f"Erro interno no servidor: {str(e)}", "status": False}, 500
 
     @jwt_required()
@@ -611,27 +634,25 @@ class EntregaResource(Resource):
         Returns:
             tuple: JSON com mensagem de sucesso e 'status' verdadeiro (status 200).
             tuple: JSON com 'error' e 'status' falso (status 404) se não encontrada.
-            tuple: JSON com 'error' e 'status' falso (status 400) se houver dependências que impeçam a deleção.
+            tuple: JSON com 'error' e 'status' falso (status 400) se houver dependências.
             tuple: JSON com 'message' e 'status' falso (status 500) em caso de erro interno.
-
-        Raises:
-            IntegrityError: Se houver violações de integridade.
-            Exception: Erros gerais.
-
-        NOTE: Cascade deleta localizações associadas.
         """
         try:
             entrega = Entrega.query.get(entrega_id)
             if not entrega:
+                logger.warning(f"Entrega não encontrada para deleção: {entrega_id}")
                 return {"error": f"Entrega com ID {entrega_id} não encontrada.", "status": False}, 404
             db.session.delete(entrega)
             db.session.commit()
+            logger.info(f"Entrega deletada: {entrega_id}")
             return {"message": gettext("Entrega deletada com sucesso."), "status": True}, 200
         except IntegrityError as e:
             db.session.rollback()
+            logger.error(f"Erro de integridade ao deletar entrega: {str(e)}")
             return {"error": f"Não é possível deletar devido a dependências: {str(e)}", "status": False}, 400
         except Exception as e:
             db.session.rollback()
+            logger.error(f"Erro interno ao deletar entrega: {str(e)}")
             return {"message": f"Erro interno no servidor: {str(e)}", "status": False}, 500
 
 class EntregaPorNumeroResource(Resource):
@@ -648,27 +669,26 @@ class EntregaPorNumeroResource(Resource):
             tuple: JSON com 'error' e 'status' falso (status 404) se não encontrada.
             tuple: JSON com 'error' e 'status' falso (status 400) se número do pedido for inválido.
             tuple: JSON com 'message' e 'status' falso (status 500) em caso de erro interno.
-
-        Raises:
-            ValueError: Se o número do pedido não seguir o formato esperado.
-            Exception: Erros gerais.
-
-        NOTE: Valida o formato do número do pedido antes da consulta.
         """
         try:
             if not re.match(r'^[A-Z0-9]{6}$', numero_pedido):
+                logger.warning(f"Número de pedido inválido: {numero_pedido}")
                 raise ValueError("Número do pedido deve ter exatamente 6 caracteres alfanuméricos maiúsculos.")
             entrega = Entrega.query.filter_by(numero_pedido=numero_pedido).first()
             if not entrega:
+                logger.warning(f"Entrega não encontrada pelo número: {numero_pedido}")
                 return {"error": f"Entrega com número {numero_pedido} não encontrada.", "status": False}, 404
+            logger.info(f"Entrega encontrada pelo número: {numero_pedido}")
             return {
                 "Entrega": entrega.json(),
                 "message": gettext("Entrega encontrada com sucesso."),
                 "status": True
             }, 200
         except ValueError as e:
+            logger.error(f"Erro de validação ao buscar entrega por número: {str(e)}")
             return {"error": f"Formato inválido: {str(e)}", "status": False}, 400
         except Exception as e:
+            logger.error(f"Erro interno ao buscar entrega por número: {str(e)}")
             return {"message": f"Erro interno no servidor: {str(e)}", "status": False}, 500
 
 class EntregaPorMotoristaResource(Resource):
@@ -684,91 +704,150 @@ class EntregaPorMotoristaResource(Resource):
             tuple: JSON com lista de entregas, mensagem de sucesso e 'status' verdadeiro (status 200).
             tuple: JSON com 'error' e 'status' falso (status 404) se nenhuma encontrada ou motorista não existir.
             tuple: JSON com 'message' e 'status' falso (status 500) em caso de erro interno.
-
-        Raises:
-            Exception: Erros gerais.
-
-        NOTE: Verifica se o motorista existe antes de listar.
         """
         try:
             if not Usuario.query.get(motorista_id):
+                logger.warning(f"Motorista não encontrado: {motorista_id}")
                 return {"error": f"Motorista com ID {motorista_id} não encontrado.", "status": False}, 404
             entregas = Entrega.query.filter_by(motorista_id=motorista_id).all()
             if not entregas:
+                logger.warning(f"Nenhuma entrega encontrada para motorista: {motorista_id}")
                 return {"error": f"Nenhuma entrega encontrada para o motorista {motorista_id}.", "status": False}, 404
+            logger.info(f"Entregas encontradas para motorista: {motorista_id}")
             return {
                 "Entregas": [e.json() for e in entregas],
                 "message": gettext("Entregas encontradas com sucesso."),
                 "status": True
             }, 200
         except Exception as e:
+            logger.error(f"Erro ao buscar entregas por motorista: {str(e)}")
             return {"message": f"Erro interno no servidor: {str(e)}", "status": False}, 500
 
 class EntregaStatusResource(Resource):
     args = reqparse.RequestParser()
-    args.add_argument('status', type=str, required=True, help='Status é obrigatório')
+    args.add_argument('status', type=validar_status(), required=True, help='Status inválido')
     args.add_argument('nome_recebido', type=validar_max_length(255), required=False, help='Nome recebido inválido')
     args.add_argument('motivo', type=validar_max_length(255), required=False, help='Motivo inválido')
+    args.add_argument('foto_prova', type=str, required=False, help='Foto de prova inválida')
+    args.add_argument('latitude', type=validar_range(-90, 90), required=False, help='Latitude inválida')
+    args.add_argument('longitude', type=validar_range(-180, 180), required=False, help='Longitude inválida')
 
     @jwt_required()
     def put(self, entrega_id):
         """
-        Atualiza o status de uma entrega.
+        Atualiza o status de uma entrega, respeitando regras de negócio específicas.
 
         Args:
-            entrega_id (str): ID da entrega.
-            JSON Body:
-                status (str): Novo status da entrega (pendente, em_rota, entregue, cancelada, nao_entregue).
-                nome_recebido (str, optional): Nome da pessoa que recebeu (obrigatório se status=entregue).
-                motivo (str, optional): Motivo (obrigatório se status=cancelada ou nao_entregue).
+            entrega_id (uuid): ID da entrega a ser atualizada.
+
+        JSON Body (dependendo do status):
+            - status (str): Novo status (pendente, em_rota, entregue, cancelada, nao_entregue).
+            - Para 'em_rota': latitude (float) e longitude (float) obrigatórios.
+            - Para 'entregue': nome_recebido (str) e foto_prova (str) obrigatórios.
+            - Para 'cancelada' ou 'nao_entregue': motivo (str) e foto_prova (str) obrigatórios.
+            - foto_prova: Pode ser nome de arquivo ou base64 (será salvo como arquivo).
 
         Returns:
-            tuple: JSON com dados atualizados, mensagem de sucesso e 'status' verdadeiro (status 200).
-            tuple: JSON com 'error' e 'status' falso (status 404) se entrega não encontrada.
-            tuple: JSON com 'error' e 'status' falso (status 400) se dados inválidos, status inválido ou campos obrigatórios faltando.
-            tuple: JSON com 'message' e 'status' falso (status 500) em caso de erro interno.
-
-        Raises:
-            ValueError: Se status for inválido ou campos obrigatórios faltarem.
-            Exception: Erros gerais.
-
-        NOTE: Valida campos condicionais com base no status.
+            tuple: JSON com mensagem de sucesso, status true, dados da entrega e localização (se aplicável) (status 200).
+            tuple: JSON com error e status false (status 400) para dados inválidos.
+            tuple: JSON com error e status false (status 401) para acesso não autorizado.
+            tuple: JSON com error e status false (status 404) se entrega não encontrada.
+            tuple: JSON com message e status false (status 500) para erros internos.
         """
         try:
+            dados = EntregaStatusResource.args.parse_args()
+            novo_status = dados['status']
             entrega = Entrega.query.get(entrega_id)
             if not entrega:
-                return {"error": f"Entrega com ID {entrega_id} não encontrada.", "status": False}, 404
-            dados = EntregaStatusResource.args.parse_args()
-            try:
-                novo_status = StatusEntrega(dados['status'].lower())
-            except ValueError:
-                return {"error": f"Status inválido: {dados['status']}. Valores permitidos: pendente, em_rota, entregue, cancelada, nao_entregue.", "status": False}, 400
-
-            if novo_status == StatusEntrega.ENTREGUE and not dados.get('nome_recebido'):
-                raise ValueError("Nome recebido é obrigatório para status 'entregue'.")
-            if novo_status in [StatusEntrega.CANCELADA, StatusEntrega.NAO_ENTREGUE] and not dados.get('motivo'):
-                raise ValueError("Motivo é obrigatório para status 'cancelada' ou 'nao_entregue'.")
-
-            entrega.status = novo_status
-            if dados['nome_recebido'] is not None:
+                logger.warning(f"Entrega não encontrada para atualização de status: {entrega_id}")
+                return {"error": gettext("Entrega com ID {} não encontrada.").format(entrega_id), "status": False}, 404
+            current_user_id = get_jwt_identity()
+            if str(entrega.motorista_id) != current_user_id:
+                logger.warning(f"Acesso não autorizado para entrega {entrega_id} por usuário {current_user_id}")
+                return {"error": gettext("Acesso não autorizado: você não é o motorista desta entrega."), "status": False}, 401
+            latitude = dados.get('latitude')
+            longitude = dados.get('longitude')
+            foto_prova = dados.get('foto_prova')
+            if foto_prova:
+                foto_prova = processar_foto_prova(foto_prova, entrega_id)
+            localizacao = None
+            if novo_status == StatusEntrega.PENDENTE:
+                pass
+            elif novo_status == StatusEntrega.EM_ROTA:
+                if latitude is None or longitude is None:
+                    raise ValueError(gettext("Latitude e longitude são obrigatórios para status 'em_rota'."))
+                localizacao = Localizacao(
+                    motorista_id=entrega.motorista_id,
+                    entrega_id=entrega.id,
+                    latitude=latitude,
+                    longitude=longitude,
+                    data_hora=db.func.current_timestamp()
+                )
+                db.session.add(localizacao)
+            elif novo_status == StatusEntrega.ENTREGUE:
+                if not dados.get('nome_recebido') or not foto_prova:
+                    raise ValueError(gettext("Nome recebido e foto de prova são obrigatórios para status 'entregue'."))
                 entrega.nome_recebido = dados['nome_recebido']
-            if dados['motivo'] is not None:
+                entrega.foto_prova = foto_prova
+                if latitude is None or longitude is None:
+                    raise ValueError(gettext("Latitude e longitude são obrigatórios para status finais."))
+                localizacao = Localizacao(
+                    motorista_id=entrega.motorista_id,
+                    entrega_id=entrega.id,
+                    latitude=latitude,
+                    longitude=longitude,
+                    data_hora=db.func.current_timestamp()
+                )
+                db.session.add(localizacao)
+            elif novo_status == StatusEntrega.CANCELADA:
+                if latitude is None or longitude is None:
+                    raise ValueError(gettext("Latitude e longitude são obrigatórios para status finais."))
+                localizacao = Localizacao(
+                    motorista_id=entrega.motorista_id,
+                    entrega_id=entrega.id,
+                    latitude=latitude,
+                    longitude=longitude,
+                    data_hora=db.func.current_timestamp()
+                )
+                db.session.add(localizacao)
+            elif novo_status == StatusEntrega.NAO_ENTREGUE:
+                if not dados.get('motivo') or not foto_prova:
+                    raise ValueError(gettext("Motivo e foto de prova são obrigatórios para status '{}'.").format(novo_status.value))
                 entrega.motivo = dados['motivo']
+                entrega.foto_prova = foto_prova
+                if latitude is None or longitude is None:
+                    raise ValueError(gettext("Latitude e longitude são obrigatórios para status finais."))
+                localizacao = Localizacao(
+                    motorista_id=entrega.motorista_id,
+                    entrega_id=entrega.id,
+                    latitude=latitude,
+                    longitude=longitude,
+                    data_hora=db.func.current_timestamp()
+                )
+                db.session.add(localizacao)
+            entrega.status = novo_status
             db.session.commit()
-            return {
-                "Entrega": entrega.json(),
+            logger.info(f"Status da entrega atualizado: {entrega_id} para {novo_status.value}")
+            response = {
                 "message": gettext("Status da entrega atualizado com sucesso."),
-                "status": True
-            }, 200
+                "status": True,
+                "Entrega": entrega.json()
+            }
+            if localizacao:
+                response["Localizacao"] = localizacao.json()
+            return response, 200
         except ValueError as e:
             db.session.rollback()
-            return {"error": f"Dados inválidos: {str(e)}", "status": False}, 400
-        except DataError as e:
+            logger.error(f"Erro de validação ao atualizar status da entrega {entrega_id}: {str(e)}")
+            return {"error": gettext("Dados inválidos: {}").format(str(e)), "status": False}, 400
+        except (DataError, IntegrityError) as e:
             db.session.rollback()
-            return {"error": f"Erro de dados: {str(e)}", "status": False}, 400
+            logger.error(f"Erro de banco ao atualizar status da entrega {entrega_id}: {str(e)}")
+            return {"error": gettext("Erro de dados ou integridade: {}").format(str(e)), "status": False}, 400
         except Exception as e:
             db.session.rollback()
-            return {"message": f"Erro interno no servidor: {str(e)}", "status": False}, 500
+            logger.error(f"Erro interno ao atualizar status da entrega {entrega_id}: {str(e)}")
+            return {"message": gettext("Erro interno no servidor: {}").format(str(e)), "status": False}, 500
 
 class LocalizacaoResource(Resource):
     args = reqparse.RequestParser()
@@ -790,17 +869,14 @@ class LocalizacaoResource(Resource):
             tuple: JSON com lista ou dados da localização, mensagem de sucesso e 'status' verdadeiro (status 200).
             tuple: JSON com 'error' e 'status' falso (status 404) se não encontrada.
             tuple: JSON com 'message' e 'status' falso (status 500) em caso de erro interno.
-
-        Raises:
-            Exception: Para erros internos.
-
-        NOTE: Para listagem, retorna vazio se não houver localizações.
         """
         try:
             if loc_id:
                 localizacao = Localizacao.query.get(loc_id)
                 if not localizacao:
+                    logger.warning(f"Localização não encontrada: {loc_id}")
                     return {"error": f"Localização com ID {loc_id} não encontrada.", "status": False}, 404
+                logger.info(f"Localização encontrada: {loc_id}")
                 return {
                     "Localizacao": localizacao.json(),
                     "message": gettext("Localização encontrada com sucesso."),
@@ -808,14 +884,14 @@ class LocalizacaoResource(Resource):
                 }, 200
             else:
                 localizacoes = Localizacao.query.all()
-                if not localizacoes:
-                    return {"message": "Nenhuma localização encontrada.", "status": True, "Localizacoes": []}, 200
+                logger.info("Lista de localizações retornada")
                 return {
                     "Localizacoes": [loc.json() for loc in localizacoes],
                     "message": gettext("Localizações listadas com sucesso."),
                     "status": True
                 }, 200
         except Exception as e:
+            logger.error(f"Erro ao buscar localização(ões): {str(e)}")
             return {"message": f"Erro interno no servidor: {str(e)}", "status": False}, 500
 
     @jwt_required()
@@ -825,27 +901,24 @@ class LocalizacaoResource(Resource):
 
         Args:
             JSON Body:
-                entrega_id (str, optional): ID da entrega (valida existência se fornecido).
-                motorista_id (str, optional): ID do motorista (valida existência se fornecido).
+                entrega_id (str, optional): ID da entrega.
+                motorista_id (str, optional): ID do motorista.
                 latitude (float): Latitude.
                 longitude (float): Longitude.
                 data_hora (str, optional): Data e hora em formato ISO.
 
         Returns:
             tuple: JSON com dados da localização criada, mensagem de sucesso e 'status' verdadeiro (status 201).
-            tuple: JSON com 'error' e 'status' falso (status 400) se dados inválidos, IDs não encontrados ou integridade violada.
+            tuple: JSON com 'error' e 'status' falso (status 400) se dados inválidos ou IDs não encontrados.
             tuple: JSON com 'message' e 'status' falso (status 500) em caso de erro interno.
-
-        Raises:
-            ValueError: Se dados forem inválidos ou IDs não existirem.
-            IntegrityError: Violação de integridade.
-            Exception: Erros gerais.
         """
         try:
             dados = LocalizacaoResource.args.parse_args()
             if dados['entrega_id'] and not Entrega.query.get(dados['entrega_id']):
+                logger.warning(f"Entrega não encontrada para localização: {dados['entrega_id']}")
                 raise ValueError("Entrega não encontrada com o ID fornecido.")
             if dados['motorista_id'] and not Usuario.query.get(dados['motorista_id']):
+                logger.warning(f"Motorista não encontrado para localização: {dados['motorista_id']}")
                 raise ValueError("Motorista não encontrado com o ID fornecido.")
             if dados['data_hora']:
                 try:
@@ -855,6 +928,7 @@ class LocalizacaoResource(Resource):
             localizacao = Localizacao(**dados)
             db.session.add(localizacao)
             db.session.commit()
+            logger.info(f"Nova localização criada: {localizacao.id}")
             return {
                 "Localizacao": localizacao.json(),
                 "message": gettext("Localização criada com sucesso."),
@@ -862,15 +936,15 @@ class LocalizacaoResource(Resource):
             }, 201
         except ValueError as e:
             db.session.rollback()
+            logger.error(f"Erro de validação ao criar localização: {str(e)}")
             return {"error": f"Dados inválidos: {str(e)}", "status": False}, 400
-        except DataError as e:
+        except (DataError, IntegrityError) as e:
             db.session.rollback()
-            return {"error": f"Erro de dados: {str(e)}", "status": False}, 400
-        except IntegrityError as e:
-            db.session.rollback()
-            return {"error": f"Violação de integridade: {str(e)}", "status": False}, 400
+            logger.error(f"Erro de banco ao criar localização: {str(e)}")
+            return {"error": f"Erro de dados ou integridade: {str(e)}", "status": False}, 400
         except Exception as e:
             db.session.rollback()
+            logger.error(f"Erro interno ao criar localização: {str(e)}")
             return {"message": f"Erro interno no servidor: {str(e)}", "status": False}, 500
 
     @jwt_required()
@@ -885,36 +959,35 @@ class LocalizacaoResource(Resource):
         Returns:
             tuple: JSON com dados atualizados, mensagem de sucesso e 'status' verdadeiro (status 200).
             tuple: JSON com 'error' e 'status' falso (status 404) se não encontrada.
-            tuple: JSON com 'error' e 'status' falso (status 400) se dados inválidos, sem atualizações ou IDs não encontrados.
+            tuple: JSON com 'error' e 'status' falso (status 400) se dados inválidos ou IDs não encontrados.
             tuple: JSON com 'message' e 'status' falso (status 500) em caso de erro interno.
-
-        Raises:
-            ValueError: Se dados forem inválidos ou IDs não existirem.
-            Exception: Erros gerais.
         """
         try:
             localizacao = Localizacao.query.get(loc_id)
             if not localizacao:
+                logger.warning(f"Localização não encontrada para atualização: {loc_id}")
                 return {"error": f"Localização com ID {loc_id} não encontrada.", "status": False}, 404
             dados = LocalizacaoResource.args.parse_args()
             atualizacoes = 0
             for campo, valor in dados.items():
                 if valor is not None:
                     if campo == 'entrega_id' and not Entrega.query.get(valor):
-                        raise ValueError("Entrega não encontrada com o ID fornecido para atualização.")
+                        logger.warning(f"Entrega não encontrada para atualização de localização: {valor}")
+                        raise ValueError("Entrega não encontrada com o ID fornecido.")
                     if campo == 'motorista_id' and not Usuario.query.get(valor):
-                        raise ValueError("Motorista não encontrado com o ID fornecido para atualização.")
+                        logger.warning(f"Motorista não encontrado para atualização de localização: {valor}")
+                        raise ValueError("Motorista não encontrado com o ID fornecido.")
                     if campo == 'data_hora':
                         try:
-                            setattr(localizacao, campo, datetime.fromisoformat(valor))
+                            valor = datetime.fromisoformat(valor)
                         except ValueError:
                             raise ValueError("Data e hora devem estar no formato ISO válido.")
-                    else:
-                        setattr(localizacao, campo, valor)
+                    setattr(localizacao, campo, valor)
                     atualizacoes += 1
             if atualizacoes == 0:
                 return {"error": "Nenhum campo fornecido para atualização.", "status": False}, 400
             db.session.commit()
+            logger.info(f"Localização atualizada: {loc_id}")
             return {
                 "Localizacao": localizacao.json(),
                 "message": gettext("Localização atualizada com sucesso."),
@@ -922,12 +995,15 @@ class LocalizacaoResource(Resource):
             }, 200
         except ValueError as e:
             db.session.rollback()
+            logger.error(f"Erro de validação ao atualizar localização: {str(e)}")
             return {"error": f"Dados inválidos: {str(e)}", "status": False}, 400
-        except DataError as e:
+        except (DataError, IntegrityError) as e:
             db.session.rollback()
-            return {"error": f"Erro de dados: {str(e)}", "status": False}, 400
+            logger.error(f"Erro de banco ao atualizar localização: {str(e)}")
+            return {"error": f"Erro de dados ou integridade: {str(e)}", "status": False}, 400
         except Exception as e:
             db.session.rollback()
+            logger.error(f"Erro interno ao atualizar localização: {str(e)}")
             return {"message": f"Erro interno no servidor: {str(e)}", "status": False}, 500
 
     @jwt_required()
@@ -943,27 +1019,28 @@ class LocalizacaoResource(Resource):
             tuple: JSON com 'error' e 'status' falso (status 404) se não encontrada.
             tuple: JSON com 'error' e 'status' falso (status 400) se houver dependências.
             tuple: JSON com 'message' e 'status' falso (status 500) em caso de erro interno.
-
-        Raises:
-            IntegrityError: Se houver violações de integridade.
-            Exception: Erros gerais.
         """
         try:
             localizacao = Localizacao.query.get(loc_id)
             if not localizacao:
+                logger.warning(f"Localização não encontrada para deleção: {loc_id}")
                 return {"error": f"Localização com ID {loc_id} não encontrada.", "status": False}, 404
             db.session.delete(localizacao)
             db.session.commit()
+            logger.info(f"Localização deletada: {loc_id}")
             return {"message": gettext("Localização deletada com sucesso."), "status": True}, 200
         except IntegrityError as e:
             db.session.rollback()
+            logger.error(f"Erro de integridade ao deletar localização: {str(e)}")
             return {"error": f"Não é possível deletar devido a dependências: {str(e)}", "status": False}, 400
         except Exception as e:
             db.session.rollback()
+            logger.error(f"Erro interno ao deletar localização: {str(e)}")
             return {"message": f"Erro interno no servidor: {str(e)}", "status": False}, 500
 
 class LocalizacaoIoTResource(Resource):
     args = reqparse.RequestParser()
+    args.add_argument('motorista_id', type=str, required=True, help='ID do motorista')
     args.add_argument('latitude', type=validar_range(-90, 90), required=True, help='Latitude é obrigatória')
     args.add_argument('longitude', type=validar_range(-180, 180), required=True, help='Longitude é obrigatória')
 
@@ -973,6 +1050,7 @@ class LocalizacaoIoTResource(Resource):
 
         Args:
             JSON Body:
+                motorista_id (str): ID do motorista.
                 latitude (float): Latitude da localização.
                 longitude (float): Longitude da localização.
 
@@ -980,20 +1058,43 @@ class LocalizacaoIoTResource(Resource):
             tuple: JSON com dados da localização criada, mensagem de sucesso e 'status' verdadeiro (status 201).
             tuple: JSON com 'error' e 'status' falso (status 400) se dados inválidos ou integridade violada.
             tuple: JSON com 'message' e 'status' falso (status 500) em caso de erro interno.
-
-        Raises:
-            ValueError: Se dados forem inválidos.
-            IntegrityError: Violação de integridade.
-            Exception: Erros gerais.
-
-        NOTE: Endpoint público para dispositivos IoT. Considerar autenticação básica em produção.
-        TODO: Adicionar validação de origem do request para segurança.
         """
         try:
             dados = LocalizacaoIoTResource.args.parse_args()
-            localizacao = Localizacao(latitude=dados['latitude'], longitude=dados['longitude'])
+            if not Usuario.query.get(dados['motorista_id']):
+                logger.warning(f"Motorista não encontrado para localização IoT: {dados['motorista_id']}")
+                raise ValueError("Motorista não encontrado com o ID fornecido.")
+
+            """
+            pega a ultima entrega acionada como iniciada deste motorista 
+            para já atualizar a referencia
+            """
+            entrega = (
+                Entrega.query
+                .filter_by(motorista_id=dados['motorista_id'], status=StatusEntrega.EM_ROTA)
+                .order_by(Entrega.atualizado_em.desc())  # ou o campo que registra a data/hora
+                .first()
+            )
+            
+            if not entrega:
+                localizacao = Localizacao(
+                    motorista_id=dados['motorista_id'],
+                    latitude=dados['latitude'],
+                    longitude=dados['longitude'],
+                    data_hora=db.func.current_timestamp()
+                )     
+            else:
+                localizacao = Localizacao(
+                    entrega_id=entrega.id,
+                    motorista_id=dados['motorista_id'],
+                    latitude=dados['latitude'],
+                    longitude=dados['longitude'],
+                    data_hora=db.func.current_timestamp()
+                )
+            
             db.session.add(localizacao)
             db.session.commit()
+            logger.info(f"Localização IoT recebida: {localizacao.id}")
             return {
                 "Localizacao": localizacao.json(),
                 "message": gettext("Localização recebida com sucesso."),
@@ -1001,15 +1102,15 @@ class LocalizacaoIoTResource(Resource):
             }, 201
         except ValueError as e:
             db.session.rollback()
+            logger.error(f"Erro de validação ao receber localização IoT: {str(e)}")
             return {"error": f"Dados inválidos: {str(e)}", "status": False}, 400
-        except DataError as e:
+        except (DataError, IntegrityError) as e:
             db.session.rollback()
-            return {"error": f"Erro de dados: {str(e)}", "status": False}, 400
-        except IntegrityError as e:
-            db.session.rollback()
-            return {"error": f"Violação de integridade: {str(e)}", "status": False}, 400
+            logger.error(f"Erro de banco ao receber localização IoT: {str(e)}")
+            return {"error": f"Erro de dados ou integridade: {str(e)}", "status": False}, 400
         except Exception as e:
             db.session.rollback()
+            logger.error(f"Erro interno ao receber localização IoT: {str(e)}")
             return {"message": f"Erro interno no servidor: {str(e)}", "status": False}, 500
 
 class LocalizacaoEntregaResource(Resource):
@@ -1025,24 +1126,23 @@ class LocalizacaoEntregaResource(Resource):
             tuple: JSON com lista de localizações, mensagem de sucesso e 'status' verdadeiro (status 200).
             tuple: JSON com 'error' e 'status' falso (status 404) se nenhuma encontrada ou entrega não existir.
             tuple: JSON com 'message' e 'status' falso (status 500) em caso de erro interno.
-
-        Raises:
-            Exception: Erros gerais.
-
-        NOTE: Verifica existência da entrega antes de listar.
         """
         try:
             if not Entrega.query.get(entrega_id):
+                logger.warning(f"Entrega não encontrada para localizações: {entrega_id}")
                 return {"error": f"Entrega com ID {entrega_id} não encontrada.", "status": False}, 404
             localizacoes = Localizacao.query.filter_by(entrega_id=entrega_id).all()
             if not localizacoes:
+                logger.warning(f"Nenhuma localização encontrada para entrega: {entrega_id}")
                 return {"error": "Nenhuma localização encontrada para esta entrega.", "status": False}, 404
+            logger.info(f"Localizações encontradas para entrega: {entrega_id}")
             return {
                 "Localizacoes": [loc.json() for loc in localizacoes],
                 "message": gettext("Localizações encontradas com sucesso."),
                 "status": True
             }, 200
         except Exception as e:
+            logger.error(f"Erro ao buscar localizações por entrega: {str(e)}")
             return {"message": f"Erro interno no servidor: {str(e)}", "status": False}, 500
 
 class LocalizacaoMotoristaResource(Resource):
@@ -1058,22 +1158,21 @@ class LocalizacaoMotoristaResource(Resource):
             tuple: JSON com lista de localizações, mensagem de sucesso e 'status' verdadeiro (status 200).
             tuple: JSON com 'error' e 'status' falso (status 404) se nenhuma encontrada ou motorista não existir.
             tuple: JSON com 'message' e 'status' falso (status 500) em caso de erro interno.
-
-        Raises:
-            Exception: Erros gerais.
-
-        NOTE: Verifica existência do motorista antes de listar.
         """
         try:
             if not Usuario.query.get(motorista_id):
+                logger.warning(f"Motorista não encontrado para localizações: {motorista_id}")
                 return {"error": f"Motorista com ID {motorista_id} não encontrado.", "status": False}, 404
             localizacoes = Localizacao.query.filter_by(motorista_id=motorista_id).all()
             if not localizacoes:
+                logger.warning(f"Nenhuma localização encontrada para motorista: {motorista_id}")
                 return {"error": "Nenhuma localização encontrada para este motorista.", "status": False}, 404
+            logger.info(f"Localizações encontradas para motorista: {motorista_id}")
             return {
                 "Localizacoes": [loc.json() for loc in localizacoes],
                 "message": gettext("Localizações encontradas com sucesso."),
                 "status": True
             }, 200
         except Exception as e:
+            logger.error(f"Erro ao buscar localizações por motorista: {str(e)}")
             return {"message": f"Erro interno no servidor: {str(e)}", "status": False}, 500
