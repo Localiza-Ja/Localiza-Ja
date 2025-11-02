@@ -1,5 +1,4 @@
 // frontend/src/components/DeliveriesList.tsx
-
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -12,9 +11,9 @@ import {
   StyleSheet,
   Alert,
   LayoutAnimationConfig,
+  FlatList,
 } from "react-native";
-// *** MUDANÇA: Importar BottomSheetView ***
-import { BottomSheetFlatList, BottomSheetView } from "@gorhom/bottom-sheet";
+import { BottomSheetView, BottomSheetFlatList } from "@gorhom/bottom-sheet";
 import { Delivery } from "../types";
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import Svg, { Line } from "react-native-svg";
@@ -24,6 +23,7 @@ import Animated, {
   useAnimatedStyle,
   withTiming,
 } from "react-native-reanimated";
+import { EntregaStatus, AtualizarStatusDetails } from "../services/api";
 
 if (
   Platform.OS === "android" &&
@@ -32,7 +32,6 @@ if (
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-// Config e Tipos (sem alterações)
 const CustomLayoutLinear: LayoutAnimationConfig = {
   duration: 400,
   create: {
@@ -48,14 +47,21 @@ const CustomLayoutLinear: LayoutAnimationConfig = {
     property: LayoutAnimation.Properties.opacity,
   },
 };
+
 type DeliveriesListProps = {
   data: Delivery[];
   focusedDelivery: Delivery | null;
   onDeliveryPress: (delivery: Delivery) => void;
-  onUpdateStatus: (deliveryId: string, newStatus: string, details: any) => void;
+  onUpdateStatus: (
+    deliveryId: string,
+    newStatus: EntregaStatus,
+    details: AtualizarStatusDetails
+  ) => void;
   onStartNavigation: () => void;
   onLogout: () => void;
+  simultaneousHandlers?: any;
 };
+
 type DeliveryListItemProps = {
   item: Delivery;
   index: number;
@@ -67,7 +73,6 @@ type DeliveryListItemProps = {
   isLastItem: boolean;
 };
 
-// Componente Filho DeliveryListItem (sem alterações)
 const DeliveryListItem: React.FC<DeliveryListItemProps> = React.memo(
   ({
     item,
@@ -85,6 +90,7 @@ const DeliveryListItem: React.FC<DeliveryListItemProps> = React.memo(
     const isNotCompleted = item.status === "nao_entregue";
     const isDone = isFinished || isCancelled || isNotCompleted;
     const itemOpacity = isDone ? "opacity-60" : "opacity-100";
+
     let circleBgColor = "bg-gray-500";
     let statusColorCode = "#6B7280";
     if (isFinished) {
@@ -100,6 +106,7 @@ const DeliveryListItem: React.FC<DeliveryListItemProps> = React.memo(
       circleBgColor = "bg-gray-500";
       statusColorCode = "#6B7280";
     }
+
     const circleTextColor = "text-white";
     const statusTextColorClass = isActive
       ? "text-orange-600"
@@ -110,6 +117,7 @@ const DeliveryListItem: React.FC<DeliveryListItemProps> = React.memo(
       : isNotCompleted
       ? "text-yellow-600"
       : "text-gray-600";
+
     const rotation = useSharedValue(isExpanded ? 180 : 0);
     useEffect(() => {
       rotation.value = withTiming(isExpanded ? 180 : 0, { duration: 500 });
@@ -131,6 +139,7 @@ const DeliveryListItem: React.FC<DeliveryListItemProps> = React.memo(
                 </Text>
               </View>
             </TouchableOpacity>
+
             {isExpanded && !isLastItem && (
               <View style={styles.lineAndIconContainer}>
                 <Svg height="100%" width="100%" style={styles.svgContainer}>
@@ -154,6 +163,7 @@ const DeliveryListItem: React.FC<DeliveryListItemProps> = React.memo(
               </View>
             )}
           </View>
+
           <View style={styles.rightColumn}>
             <TouchableOpacity
               onPress={() => onItemPress(item)}
@@ -161,12 +171,12 @@ const DeliveryListItem: React.FC<DeliveryListItemProps> = React.memo(
             >
               {isExpanded ? (
                 <View className="space-y-4">
-                  {/* ... Conteúdo Expandido ... */}
                   <View>
                     <Text className="text-lg font-bold text-gray-900">
                       {item.endereco_entrega}
                     </Text>
                   </View>
+
                   <View className="flex-row items-center mt-4">
                     <View className="p-2 bg-gray-300 rounded-full mr-3">
                       <Feather name="user" size={24} color="#374151" />
@@ -175,6 +185,7 @@ const DeliveryListItem: React.FC<DeliveryListItemProps> = React.memo(
                       {item.nome_cliente}
                     </Text>
                   </View>
+
                   <View className="space-y-2 pl-1">
                     {item.observacao && (
                       <Text className="text-sm text-gray-600">
@@ -184,25 +195,24 @@ const DeliveryListItem: React.FC<DeliveryListItemProps> = React.memo(
                         </Text>
                       </Text>
                     )}
-                    {
-                      <Text className="text-sm text-gray-600">
-                        Número do Pedido:{" "}
-                        <Text className="text-base text-gray-800">
-                          {item.numero_pedido}
-                        </Text>
+
+                    <Text className="text-sm text-gray-600">
+                      Número do Pedido:{" "}
+                      <Text className="text-base text-gray-800">
+                        {item.numero_pedido}
                       </Text>
-                    }
-                    {
-                      <Text className="text-sm text-gray-600">
-                        Status da entrega:{" "}
-                        <Text
-                          className={`text-base font-bold ${statusTextColorClass}`}
-                        >
-                          {item.status}
-                        </Text>
+                    </Text>
+
+                    <Text className="text-sm text-gray-600">
+                      Status da entrega:{" "}
+                      <Text
+                        className={`text-base font-bold ${statusTextColorClass}`}
+                      >
+                        {item.status}
                       </Text>
-                    }
+                    </Text>
                   </View>
+
                   <View className="pt-4 mt-3">
                     {!isDone && (
                       <View className="flex-row">
@@ -217,6 +227,7 @@ const DeliveryListItem: React.FC<DeliveryListItemProps> = React.memo(
                             </Text>
                           </TouchableOpacity>
                         )}
+
                         {item.status === "em_rota" && (
                           <TouchableOpacity
                             className="bg-green-600 h-12 rounded-xl flex-1 flex-row justify-center items-center mr-2"
@@ -232,17 +243,16 @@ const DeliveryListItem: React.FC<DeliveryListItemProps> = React.memo(
                             </Text>
                           </TouchableOpacity>
                         )}
-                        {
-                          <TouchableOpacity
-                            className="bg-red-600 h-12 rounded-xl flex-1 flex-row justify-center items-center"
-                            onPress={(e) => handleCancel(e, item)}
-                          >
-                            <Feather name="x-circle" size={18} color="white" />
-                            <Text className="text-white text-center font-bold ml-2">
-                              Cancelar
-                            </Text>
-                          </TouchableOpacity>
-                        }
+
+                        <TouchableOpacity
+                          className="bg-red-600 h-12 rounded-xl flex-1 flex-row justify-center items-center"
+                          onPress={(e) => handleCancel(e, item)}
+                        >
+                          <Feather name="x-circle" size={18} color="white" />
+                          <Text className="text-white text-center font-bold ml-2">
+                            Cancelar
+                          </Text>
+                        </TouchableOpacity>
                       </View>
                     )}
                   </View>
@@ -263,7 +273,7 @@ const DeliveryListItem: React.FC<DeliveryListItemProps> = React.memo(
       </View>
     );
   }
-); // --- Fim do DeliveryListItem ---
+);
 
 // --- Componente Principal DeliveriesList ---
 export default function DeliveriesList({
@@ -273,14 +283,24 @@ export default function DeliveriesList({
   onUpdateStatus,
   onStartNavigation,
   onLogout,
+  simultaneousHandlers,
 }: DeliveriesListProps) {
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [deliveryToConfirm, setDeliveryToConfirm] = useState<Delivery | null>(
     null
   );
 
-  // Handlers (iguais - sem alterações)
+  // ✅ BLOQUEIO: não permitir iniciar uma nova se já existe alguma "em_rota"
   const handleStart = (event: GestureResponderEvent, item: Delivery) => {
+    const jaTemEmRota = data.some((d) => d.status === "em_rota");
+    if (jaTemEmRota) {
+      Alert.alert(
+        "Entrega em andamento",
+        "Você já possui uma entrega em rota. Finalize ou cancele antes de iniciar outra."
+      );
+      return;
+    }
+
     Alert.alert(
       "Iniciar Entrega",
       `Tem certeza que deseja iniciar a entrega para "${item.nome_cliente}"?`,
@@ -296,10 +316,12 @@ export default function DeliveriesList({
       ]
     );
   };
+
   const handleFinish = (event: GestureResponderEvent, item: Delivery) => {
     setDeliveryToConfirm(item);
     setIsModalVisible(true);
   };
+
   const handleConfirmDelivery = (details: {
     status: "entregue" | "nao_entregue";
     nome_recebido: string;
@@ -313,6 +335,7 @@ export default function DeliveriesList({
     setIsModalVisible(false);
     setDeliveryToConfirm(null);
   };
+
   const handleCancel = (event: GestureResponderEvent, item: Delivery) => {
     Alert.alert(
       "Cancelar Entrega",
@@ -330,20 +353,18 @@ export default function DeliveriesList({
       ]
     );
   };
+
   const handleItemPress = (item: Delivery) => {
     LayoutAnimation.configureNext(CustomLayoutLinear);
     onDeliveryPress(item);
   };
 
   return (
-    // *** MUDANÇA: Substituído <View> por <BottomSheetView> ***
     <BottomSheetView style={styles.listContainer}>
-      {/* O Header agora é só o texto, dentro do container azul */}
-      <View style={styles.listHeader}>
+      <View style={styles.listHeader} pointerEvents="none" collapsable={false}>
         <Text style={styles.headerText}>Entregas do Dia</Text>
       </View>
 
-      {/* A FlatList vem logo abaixo, dentro do container azul */}
       <BottomSheetFlatList<Delivery>
         data={data}
         keyExtractor={(item: Delivery) => item.id}
@@ -363,20 +384,20 @@ export default function DeliveriesList({
         contentContainerStyle={styles.listContentContainer}
         removeClippedSubviews={false}
         extraData={focusedDelivery}
+        simultaneousHandlers={simultaneousHandlers}
+        overScrollMode="always"
+        keyboardShouldPersistTaps="handled"
       />
 
-      {/* O Modal precisa ficar FORA do BottomSheetView para funcionar corretamente */}
-      {/* *** MUDANÇA: Movido o Modal para fora *** */}
       <ConfirmationModal
         visible={isModalVisible}
         onClose={() => setIsModalVisible(false)}
         onConfirm={handleConfirmDelivery}
       />
-    </BottomSheetView> // *** MUDANÇA: Fechando <BottomSheetView> ***
+    </BottomSheetView>
   );
 }
 
-// Estilos (Sem alterações nos estilos)
 const styles = StyleSheet.create({
   listContainer: {
     flex: 1,
