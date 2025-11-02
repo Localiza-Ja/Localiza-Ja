@@ -161,10 +161,20 @@ export default function Login() {
         Alert.alert("Erro de Login", errorMessage);
       }
     } else if (userType === "cliente") {
+      // Se quiser mostrar o Alert antes de navegar:
       Alert.alert(
         "Em breve",
-        "A funcionalidade de rastreio para clientes ainda está em desenvolvimento."
+        "A funcionalidade de rastreio para clientes ainda está em desenvolvimento.",
+        [
+          {
+            text: "OK",
+            onPress: () => router.push("/client"), // Navegue para a tela desejada aqui
+          },
+        ]
       );
+
+      // Se não quiser mostrar o Alert, basta navegar direto:
+      // router.push("/cliente");
     }
   };
 

@@ -1,22 +1,23 @@
 // frontend/src/components/DeliveryPanel.tsx
-
 import React, { useMemo, useRef, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import BottomSheet from "@gorhom/bottom-sheet";
 import DeliveriesList from "./DeliveriesList";
 import { Delivery } from "../types";
+import { EntregaStatus, AtualizarStatusDetails } from "../services/api";
 
 type DeliveryPanelProps = {
   deliveriesData: Delivery[];
   selectedDelivery: Delivery | null;
   onDeliveryPress: (delivery: Delivery) => void;
-  onUpdateStatus: (deliveryId: string, newStatus: string, details: any) => void;
+  onUpdateStatus: (
+    deliveryId: string,
+    newStatus: EntregaStatus,
+    details: AtualizarStatusDetails
+  ) => void;
   onLogout: () => void;
   onStartNavigation: () => void;
 };
-
-// Handle Vazio Removido
-// const EmptyHandle = () => <View />; // Não mais necessário
 
 export default function DeliveryPanel({
   deliveriesData,
@@ -48,11 +49,11 @@ export default function DeliveryPanel({
       index={1}
       snapPoints={snapPoints}
       onChange={(index) => setActiveSnapIndex(index)}
-      // *** CORREÇÃO: Remove completamente o handle e sua área ***
       handleComponent={() => null}
-      // handleIndicatorStyle removido
-      // containerStyle removido
-      backgroundStyle={styles.panelBackground} // Fundo cinza claro
+      backgroundStyle={styles.panelBackground}
+      enableContentPanningGesture={true}
+      enableHandlePanningGesture={true}
+      activeOffsetY={[-10, 10]}
     >
       <DeliveriesList
         data={deliveriesData}
@@ -61,6 +62,7 @@ export default function DeliveryPanel({
         onUpdateStatus={onUpdateStatus}
         onLogout={onLogout}
         onStartNavigation={handleStartAndCollapse}
+        simultaneousHandlers={bottomSheetRef}
       />
     </BottomSheet>
   );
@@ -68,7 +70,7 @@ export default function DeliveryPanel({
 
 const styles = StyleSheet.create({
   panelBackground: {
-    backgroundColor: "rgba(230, 230, 230, 0.92)",
+    backgroundColor: "#1F2937",
     borderTopLeftRadius: 40,
     borderTopRightRadius: 40,
     // *** Adicionado overflow hidden aqui também para garantir o corte no topo ***

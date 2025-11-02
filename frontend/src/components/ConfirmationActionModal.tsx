@@ -25,7 +25,7 @@ export default function ConfirmationActionModal({
   message,
   confirmText = "Confirmar",
   cancelText = "Cancelar",
-  confirmButtonStyle, // Para estilização extra (ex: botão vermelho)
+  confirmButtonStyle,
   confirmTextStyle,
 }: ConfirmationActionModalProps) {
   return (
@@ -36,7 +36,7 @@ export default function ConfirmationActionModal({
       animationIn="fadeInUp"
       animationOut="fadeOutDown"
       backdropTransitionOutTiming={0}
-      style={styles.modal} // Estilo para centralizar
+      style={styles.modal}
     >
       <View className="w-full max-w-sm bg-gray-800 rounded-xl p-6 shadow-lg mx-4">
         <Text className="text-xl font-bold text-white text-center mb-4">
@@ -46,7 +46,6 @@ export default function ConfirmationActionModal({
           {message}
         </Text>
         <View className="flex-row justify-between space-x-3">
-          {/* Botão Cancelar */}
           <TouchableOpacity
             className="flex-1 bg-gray-600 h-12 rounded-lg justify-center items-center"
             onPress={onClose}
@@ -54,9 +53,7 @@ export default function ConfirmationActionModal({
             <Text className="text-white font-bold text-base">{cancelText}</Text>
           </TouchableOpacity>
 
-          {/* Botão Confirmar */}
           <TouchableOpacity
-            // Aplica estilos base e permite sobrescrever
             style={[styles.confirmButtonBase, confirmButtonStyle]}
             className="flex-1 h-12 rounded-lg justify-center items-center"
             onPress={onConfirm}

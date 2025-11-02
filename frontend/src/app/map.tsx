@@ -1,5 +1,4 @@
 // frontend/src/app/map.tsx
-
 import { router } from "expo-router";
 import {
   View,
@@ -11,8 +10,8 @@ import {
   Platform,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
-import MapView, { Marker, Polyline } from "react-native-maps";
-import React, { useRef, useState, useEffect } from "react";
+import MapView, { Marker, Polyline, Circle } from "react-native-maps";
+import React, { useRef, useState, useEffect, memo } from "react";
 import * as Location from "expo-location";
 import { Delivery } from "../types";
 import AppHeader from "../components/AppHeader";
@@ -23,12 +22,20 @@ import {
   logoutMotorista,
   getEntregasPorMotorista,
   updateStatusEntrega,
+  EntregaStatus,
+  AtualizarStatusDetails,
 } from "../services/api";
 import { Feather } from "@expo/vector-icons";
-// import { BlurView } from "expo-blur"; // <-- REMOVIDO
 
 const appLogo = require("../../assets/images/lj-logo.png");
 const navigationArrow = require("../../assets/images/navigation-arrow.png");
+
+type LocationCoords = Location.LocationObject["coords"];
+
+const ROUTE_COLOR = "#4285F4";
+const ROUTE_OUTLINE_COLOR = "#FFFFFF";
+const ROUTE_WIDTH = 6;
+const ROUTE_OUTLINE_WIDTH = ROUTE_WIDTH + 4;
 
 const ORS_API_KEY =
   "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImUwZGJlZDIyODYzZjQ2MmNhYWFlY2EyNGQ1MWFjMDI0IiwiaCI6Im11cm11cjY0In0=";
@@ -100,6 +107,30 @@ const geocodeAddress = async (address: string) => {
   }
 };
 
+const CustomDeliveryMarker: React.FC<{ color: string }> = ({ color }) => (
+  <View style={styles.deliveryPin}>
+    <Feather name="map-pin" size={32} color={color} />
+    <View style={[styles.deliveryPinDot, { backgroundColor: color }]} />
+  </View>
+);
+
+const DriverIndicator: React.FC = memo(
+  () => {
+    return (
+      <Image source={navigationArrow} style={styles.fixedNavigationIcon} />
+    );
+  },
+  () => true
+);
+
+const getSmartZoomLevel = (speed: number): number => {
+  const speedKmh = speed * 3.6;
+  if (speedKmh > 80) return 17;
+  else if (speedKmh > 40) return 17;
+  else if (speedKmh > 10) return 18;
+  else return 17;
+};
+
 export default function MapScreen() {
   const mapRef = useRef<MapView>(null);
   const [motorista, setMotorista] = useState<any>(null);
@@ -112,10 +143,12 @@ export default function MapScreen() {
   const [routeCoordinates, setRouteCoordinates] = useState<
     { latitude: number; longitude: number }[]
   >([]);
+  const [pastCoordinates, setPastCoordinates] = useState<
+    { latitude: number; longitude: number }[]
+  >([]);
   const [isNavigating, setIsNavigating] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isMapCentered, setIsMapCentered] = useState(true);
-  // const [isPanelOpen, setIsPanelOpen] = useState(true); // <-- REMOVIDO
 
   useEffect(() => {
     const carregarDadosIniciais = async () => {
@@ -123,6 +156,7 @@ export default function MapScreen() {
         const sessionResponse = await getSession();
         const motoristaLogado = sessionResponse.data.Usuario;
         setMotorista(motoristaLogado);
+
         const todasEntregasResponse = await getEntregasPorMotorista(
           motoristaLogado.id
         );
@@ -178,6 +212,7 @@ export default function MapScreen() {
         },
         (location) => {
           setDriverLocation(location);
+          setPastCoordinates((prev) => [...prev, location.coords]);
         }
       );
     };
@@ -218,16 +253,22 @@ export default function MapScreen() {
   }, [driverLocation, selectedDelivery]);
 
   useEffect(() => {
-    if (isNavigating && driverLocation && mapRef.current && isMapCentered) {
-      mapRef.current.animateCamera(
-        {
-          center: driverLocation.coords,
-          heading: driverLocation.coords.heading || 0,
-          pitch: 45,
-          zoom: 18,
-        },
-        { duration: 1000 }
-      );
+    if (driverLocation && mapRef.current && isMapCentered) {
+      const currentZoom = getSmartZoomLevel(driverLocation.coords.speed || 0);
+      const cameraSettings = isNavigating
+        ? {
+            center: driverLocation.coords,
+            heading: driverLocation.coords.heading || 0,
+            pitch: 45,
+            zoom: currentZoom,
+          }
+        : {
+            center: driverLocation.coords,
+            heading: 0,
+            pitch: 0,
+            zoom: 16,
+          };
+      mapRef.current.animateCamera(cameraSettings, { duration: 400 });
     }
   }, [isNavigating, driverLocation, isMapCentered]);
 
@@ -252,21 +293,53 @@ export default function MapScreen() {
 
   function handleDeliveryPress(delivery: Delivery) {
     setIsNavigating(false);
+
     if (selectedDelivery?.id === delivery.id) {
       setSelectedDelivery(null);
+      setRouteCoordinates([]);
+      setIsMapCentered(false);
     } else {
       setSelectedDelivery(delivery);
-      setIsMapCentered(true);
+      setIsMapCentered(false);
+      if (mapRef.current && driverLocation && delivery.latitude) {
+        mapRef.current.fitToCoordinates(
+          [
+            driverLocation.coords,
+            { latitude: delivery.latitude, longitude: delivery.longitude! },
+          ],
+          {
+            edgePadding: { top: 100, right: 50, bottom: 300, left: 50 },
+            animated: true,
+          }
+        );
+      }
     }
   }
 
+  /**
+   * ✅ BLOQUEIO GLOBAL: impede iniciar "em_rota" se já houver outra entrega em rota.
+   */
   async function handleUpdateStatus(
     deliveryId: string,
-    newStatus: string,
-    details: any
+    newStatus: EntregaStatus,
+    details: AtualizarStatusDetails
   ) {
     try {
+      if (newStatus === "em_rota") {
+        const outraEmRota = deliveriesData.find(
+          (d) => d.status === "em_rota" && d.id !== deliveryId
+        );
+        if (outraEmRota) {
+          Alert.alert(
+            "Entrega em andamento",
+            "Você já possui uma entrega em rota. Finalize ou cancele antes de iniciar outra."
+          );
+          return;
+        }
+      }
+
       await updateStatusEntrega(deliveryId, newStatus, details);
+
       const updatedDeliveries = deliveriesData.map((d) =>
         d.id === deliveryId ? { ...d, status: newStatus, ...details } : d
       );
@@ -279,6 +352,7 @@ export default function MapScreen() {
             (d) => d.status === "pendente"
           );
           setSelectedDelivery(proximaEntrega || null);
+          setIsNavigating(false);
         }
       }
     } catch (error: any) {
@@ -291,20 +365,17 @@ export default function MapScreen() {
   }
 
   function handleStartNavigation() {
-    if (selectedDelivery) {
+    if (selectedDelivery && driverLocation && mapRef.current) {
       setIsNavigating(true);
       setIsMapCentered(true);
+      console.log(
+        "INÍCIO DA NAVEGAÇÃO: isNavigating: true, isMapCentered: true"
+      );
     }
   }
 
   const handleCenterMap = () => {
     if (driverLocation && mapRef.current) {
-      mapRef.current.animateToRegion({
-        latitude: driverLocation.coords.latitude,
-        longitude: driverLocation.coords.longitude,
-        latitudeDelta: 0.01,
-        longitudeDelta: 0.01,
-      });
       setIsMapCentered(true);
     }
   };
@@ -324,6 +395,8 @@ export default function MapScreen() {
     );
   }
 
+  const centerIconName = isNavigating ? "navigation" : "compass";
+
   return (
     <View style={styles.container}>
       <StatusBar style="light" backgroundColor="#21222D" />
@@ -331,7 +404,17 @@ export default function MapScreen() {
         ref={mapRef}
         style={styles.map}
         initialRegion={initialRegion}
-        onPanDrag={() => setIsMapCentered(false)}
+        onPanDrag={() => {}}
+        onRegionChangeComplete={(region, details) => {
+          if (isMapCentered) {
+            if (details && details.isGesture) {
+              setIsMapCentered(false);
+              console.log(
+                "RASTREAMENTO DESLIGADO POR INTERAÇÃO MANUAL (pan/zoom/tilt)"
+              );
+            }
+          }
+        }}
       >
         {deliveriesData
           .filter((d) => {
@@ -341,49 +424,83 @@ export default function MapScreen() {
               d.status !== "cancelada" && d.status !== "entregue";
             return isPendingOrInRoute && hasValidCoordinates;
           })
-          .map((delivery) => (
-            <Marker
-              key={`delivery-${delivery.id}`}
-              coordinate={{
-                latitude: delivery.latitude!,
-                longitude: delivery.longitude!,
-              }}
-              pinColor={selectedDelivery?.id === delivery.id ? "green" : "red"}
-              onPress={() => handleDeliveryPress(delivery)}
-            />
-          ))}
-        {routeCoordinates.length > 0 && selectedDelivery && (
+          .map((delivery) => {
+            const markerColor =
+              selectedDelivery?.id === delivery.id ? "#34A853" : "#EA4335";
+            return (
+              <Marker
+                key={`delivery-${delivery.id}`}
+                coordinate={{
+                  latitude: delivery.latitude!,
+                  longitude: delivery.longitude!,
+                }}
+                onPress={() => handleDeliveryPress(delivery)}
+                anchor={{ x: 0.5, y: 1 }}
+              >
+                <CustomDeliveryMarker color={markerColor} />
+              </Marker>
+            );
+          })}
+
+        {pastCoordinates.length > 0 && (
           <Polyline
-            coordinates={routeCoordinates}
-            strokeColor="#1E90FF"
-            strokeWidth={5}
+            coordinates={pastCoordinates}
+            strokeColor="#AAAAAA"
+            strokeWidth={3}
+            lineDashPattern={[10, 10]}
+            zIndex={0}
           />
         )}
-        {isNavigating && driverLocation && (
-          <Marker
-            coordinate={driverLocation.coords}
-            anchor={{ x: 0.5, y: 0.5 }}
-            rotation={driverLocation.coords.heading || 0}
-          >
-            <Image source={navigationArrow} style={styles.navigationIcon} />
-          </Marker>
+
+        {routeCoordinates.length > 0 && selectedDelivery && (
+          <>
+            <Polyline
+              coordinates={routeCoordinates}
+              strokeColor={ROUTE_OUTLINE_COLOR}
+              strokeWidth={ROUTE_OUTLINE_WIDTH}
+              zIndex={1}
+            />
+            <Polyline
+              coordinates={routeCoordinates}
+              strokeColor={ROUTE_COLOR}
+              strokeWidth={ROUTE_WIDTH}
+              zIndex={2}
+            />
+          </>
         )}
-        {!isNavigating && driverLocation && (
-          <Marker
-            coordinate={driverLocation.coords}
-            pinColor="blue"
-            title="Sua Posição"
-          />
+
+        {driverLocation && !isNavigating && (
+          <>
+            <Circle
+              center={driverLocation.coords}
+              radius={driverLocation.coords.accuracy || 20}
+              strokeWidth={1}
+              strokeColor="rgba(26, 115, 232, 0.5)"
+              fillColor="rgba(26, 115, 232, 0.1)"
+              zIndex={1}
+            />
+            <Marker
+              coordinate={driverLocation.coords}
+              anchor={{ x: 0.5, y: 0.5 }}
+              zIndex={3}
+              rotation={driverLocation.coords.heading || 0}
+            >
+              <Image
+                source={navigationArrow}
+                style={styles.mapNavigationIcon}
+              />
+            </Marker>
+          </>
         )}
       </MapView>
 
-      {/* BlurView REMOVIDO DAQUI */}
+      {driverLocation && isNavigating && isMapCentered && <DriverIndicator />}
 
       <AppHeader logoSource={appLogo} onLogout={handleLogout} />
 
       {!isMapCentered && (
         <TouchableOpacity style={styles.centerButton} onPress={handleCenterMap}>
-          <Feather name="navigation" size={24} color="black" />
+          <Feather name={centerIconName} size={24} color="#5F6368" />
         </TouchableOpacity>
       )}
 
@@ -394,7 +511,6 @@ export default function MapScreen() {
         onUpdateStatus={handleUpdateStatus}
         onLogout={handleLogout}
         onStartNavigation={handleStartNavigation}
-        // prop 'onPanelStateChange' REMOVIDA DAQUI
       />
     </View>
   );
@@ -403,19 +519,51 @@ export default function MapScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   map: { ...StyleSheet.absoluteFillObject },
-  // estilo 'mapBlur' REMOVIDO DAQUI
-  navigationIcon: { width: 30, height: 30 },
+  fixedNavigationIcon: {
+    position: "absolute",
+    top: "50%",
+    left: "50%",
+    width: 25,
+    height: 25,
+    marginLeft: -12.5,
+    marginTop: -12.5 - 50,
+    zIndex: 100,
+  },
+  mapNavigationIcon: {
+    width: 20,
+    height: 20,
+  },
   centerButton: {
     position: "absolute",
-    bottom: "40%",
+    bottom: 100,
     right: 20,
     backgroundColor: Platform.OS === "ios" ? "rgba(255,255,255,0.85)" : "white",
-    borderRadius: Platform.OS === "ios" ? 20 : 30,
-    padding: 15,
+    borderRadius: 30,
+    padding: 10,
     elevation: 8,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: Platform.OS === "ios" ? 0.15 : 0.25,
     shadowRadius: 3.84,
+  },
+  deliveryPin: {
+    justifyContent: "center",
+    alignItems: "center",
+    width: 35,
+    height: 40,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 4,
+  },
+  deliveryPinDot: {
+    position: "absolute",
+    top: 7,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "white",
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.1)",
   },
 });

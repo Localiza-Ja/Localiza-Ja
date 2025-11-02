@@ -1,4 +1,6 @@
-//fronend/src/types/index.ts
+// frontend/src/types/index.ts
+
+import type { EntregaStatus } from "../services/api";
 
 export interface Item {
   id: number;
@@ -11,7 +13,7 @@ export type Delivery = {
   motorista_id: string;
   endereco_entrega: string;
   numero_pedido: string;
-  status: string;
+  status: EntregaStatus;
   nome_cliente: string;
   nome_recebido: string | null;
   observacao: string | null;

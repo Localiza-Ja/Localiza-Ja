@@ -52,3 +52,4 @@ Join our community of developers creating universal apps.
 # pelo terminal cmd:
 # venv\Scripts\activate
 # python main.py
+# flask --app main seed-db
