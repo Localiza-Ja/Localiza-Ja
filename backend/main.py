@@ -122,5 +122,12 @@ api.add_resource(LocalizacaoIoTResource, '/localizacoes/iot')
 api.add_resource(LocalizacaoEntregaResource, '/localizacoes/entrega/<uuid:entrega_id>')
 api.add_resource(LocalizacaoMotoristaResource, '/localizacoes/motorista/<uuid:motorista_id>')
 
+# Bloco para registrar o comando 'seed-db' (POSIÇÃO CORRETA)
+@app.cli.command("seed-db")
+def seed_db_command():
+    """Popula o banco de dados com dados de teste."""
+    from seed import seed_data # Adicione o import aqui dentro para evitar importação circular
+    seed_data()
+
 if __name__ == "__main__":
     app.run(host='0.0.0.0', debug=True)
