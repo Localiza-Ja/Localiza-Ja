@@ -577,7 +577,7 @@ Os endpoints são organizados por módulo. Todos os endpoints protegidos requere
 - **Descrição**: Obtém uma entrega por número de pedido.
 - **Parâmetros de Requisição (Path)**: `numero_pedido` (string, **obrigatório**).
 - **Parâmetros de Requisição (Body)**: Nenhum.
-- **Headers**: `Authorization: Bearer <token>` (**obrigatório**).
+- **Headers**: Nenhum (endpoint público).
 - **Exemplo de Requisição cURL**:
   ```
   curl -X GET http://localhost:5000/entregas/numero_pedido/ABC123 \
