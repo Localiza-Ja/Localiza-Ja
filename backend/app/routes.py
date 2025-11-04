@@ -656,7 +656,6 @@ class EntregaResource(Resource):
             return {"message": f"Erro interno no servidor: {str(e)}", "status": False}, 500
 
 class EntregaPorNumeroResource(Resource):
-    @jwt_required()
     def get(self, numero_pedido):
         """
         Recupera uma entrega pelo número do pedido.
