@@ -211,7 +211,7 @@ void loop() {
 
   // 3) Envio periódico (ex.: a cada 30s)
   static unsigned long lastSend = 0;
-  const unsigned long sendInterval = 30000;
+  const unsigned long sendInterval = 40000;
   if (millis() - lastSend >= sendInterval) {
     sendLocation();          // usa getGpsCoordinates() com isValid+age
     lastSend = millis();
