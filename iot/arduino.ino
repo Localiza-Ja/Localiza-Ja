@@ -12,8 +12,7 @@ const char* ssid = "123";               // SUBSTITUA PELO SEU SSID
 const char* password = "çççççççç";      // SUBSTITUA PELA SUA SENHA
 
 // IDs que o seu backend espera
-const char* motoristaId = "a1b2c3d4-e5f6-7890-1234-567890abcdef";
-const char* entregaId = "f0e9d8c7-b6a5-4321-fedc-ba9876543210";
+const char* motoristaId = "c7c64635-4a1d-4bc7-b4c5-8c0286df31f8";
 
 // Endereço e Porta do Servidor Flask
 const char* BACKEND_IP = "10.75.10.144";
@@ -32,13 +31,18 @@ String backendUrl() {
   return String("http://") + BACKEND_IP + ":" + String(BACKEND_PORT) + String(ENDPOINT_PATH);
 }
 
-// Função que lê coordenadas reais do GPS
+// Considera fix "fresco" se a última atualização tiver até 3 segundos
 bool getGpsCoordinates(float &lat, float &lon) {
-  while (SerialGPS.available() > 0) {
-    gps.encode(SerialGPS.read());
+  // drena um pouco de serial para atualizar o parser
+  unsigned long t0 = millis();
+  while (millis() - t0 < 50) {          // ~50ms de leitura leve
+    while (SerialGPS.available() > 0) {
+      gps.encode(SerialGPS.read());
+    }
+    delay(1);
   }
 
-  if (gps.location.isUpdated()) {
+  if (gps.location.isValid() && gps.location.age() <= 3000) {
     lat = gps.location.lat();
     lon = gps.location.lng();
     return true;
@@ -97,11 +101,9 @@ void sendLocation() {
   http.addHeader("Content-Type", "application/json");
 
   StaticJsonDocument<400> doc;
-  doc["entrega_id"] = entregaId;
   doc["motorista_id"] = motoristaId;
   doc["latitude"] = currentLat;
   doc["longitude"] = currentLon;
-  doc["data_hora"] = dataHora;
 
   String payload;
   serializeJson(doc, payload);
@@ -138,6 +140,7 @@ void setup() {
   Serial.println("\nInicializando ESP32 com GPS...");
 
   // Inicializa GPS — ajuste automático de baud rate se necessário
+  SerialGPS.setRxBufferSize(1024);
   SerialGPS.begin(9600, SERIAL_8N1, RXD2, TXD2);
   Serial.println("GPS iniciado em 9600 baud.");
 
@@ -186,26 +189,34 @@ void setup() {
 }
 
 void loop() {
+  // 1) Alimenta o parser o tempo todo (crítico!)
   while (SerialGPS.available() > 0) {
     gps.encode(SerialGPS.read());
   }
 
-  if (gps.location.isUpdated()) {
-  Serial.printf("Lat: %.6f | Lon: %.6f | Satélites: %d\n",
-                gps.location.lat(),
-                gps.location.lng(),
-                gps.satellites.value());
-  } else if (gps.charsProcessed() > 500 && gps.satellites.value() == 0) {
-    Serial.println("⚠️ GPS ainda sem fix. Aguarde alguns minutos em local aberto...");
+  // 2) Mensagem de status (a cada 1s)
+  static unsigned long lastStatus = 0;
+  if (millis() - lastStatus >= 1000) {
+    if (gps.location.isValid()) {
+      Serial.printf("Lat: %.6f | Lon: %.6f | Satélites: %d | age=%lums\n",
+                    gps.location.lat(),
+                    gps.location.lng(),
+                    gps.satellites.value(),
+                    gps.location.age());
+    } else {
+      Serial.println("Aguardando fix GPS...");
+    }
+    lastStatus = millis();
   }
- 
+
+  // 3) Envio periódico (ex.: a cada 30s)
   static unsigned long lastSend = 0;
   const unsigned long sendInterval = 30000;
-
   if (millis() - lastSend >= sendInterval) {
-    sendLocation();
+    sendLocation();          // usa getGpsCoordinates() com isValid+age
     lastSend = millis();
   }
 
-  delay(60000);
+  // 4) Micro pausa para cooperar com WiFi/RTOS (não bloqueante)
+  delay(1);
 }
