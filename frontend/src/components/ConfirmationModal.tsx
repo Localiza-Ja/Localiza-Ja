@@ -1,4 +1,4 @@
-// frontend/src/components/ConfirmationModal.tsx
+//frontend/src/components/ConfirmationModal.tsx
 
 import React, { useState } from "react";
 import {
@@ -16,7 +16,10 @@ import {
   Platform,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
-import * as ImagePicker from "expo-image-picker";
+import {
+  pickFromCameraDataUrl,
+  pickFromLibraryDataUrl,
+} from "../utils/pickProofPhotoBase64";
 
 type ConfirmationModalProps = {
   visible: boolean;
@@ -35,63 +38,83 @@ export default function ConfirmationModal({
   onClose,
   onConfirm,
 }: ConfirmationModalProps) {
+  // Estados do formulário (sucesso/não entregue, texto e foto).
   const [isSuccess, setIsSuccess] = useState(true);
   const [receiverName, setReceiverName] = useState("");
   const [reason, setReason] = useState("");
-  const [photo, setPhoto] = useState<string | null>(null);
+  const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [photoDataUrl, setPhotoDataUrl] = useState<string | null>(null);
   const [observations, setObservations] = useState("");
 
-  const handleChoosePhoto = async () => {
-    const permissionResult =
-      await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (permissionResult.granted === false) {
-      Alert.alert(
-        "Permissão necessária",
-        "Você recusou o acesso à sua galeria de fotos!"
-      );
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 0.8,
-    });
-
-    if (!result.canceled) {
-      setPhoto(result.assets[0].uri);
+  // Tira foto pela câmera.
+  const openCamera = async () => {
+    const picked = await pickFromCameraDataUrl();
+    if (picked) {
+      setPhotoUri(picked.uri);
+      setPhotoDataUrl(picked.dataUrl);
     }
   };
 
-  const handleConfirm = () => {
-    if (isSuccess && !receiverName.trim()) {
-      Alert.alert("Campo obrigatório", "O nome de quem recebeu é obrigatório.");
-      return;
+  // Escolhe foto da galeria.
+  const openGallery = async () => {
+    const picked = await pickFromLibraryDataUrl();
+    if (picked) {
+      setPhotoUri(picked.uri);
+      setPhotoDataUrl(picked.dataUrl);
     }
-    if (!isSuccess && !reason.trim()) {
-      Alert.alert(
-        "Campo obrigatório",
-        "O motivo é obrigatório quando a entrega não é realizada."
-      );
-      return;
-    }
+  };
 
-    onConfirm({
-      status: isSuccess ? "entregue" : "nao_entregue",
-      nome_recebido: receiverName,
-      motivo: isSuccess ? "" : reason,
-      foto_prova: photo,
-      observacao: observations,
-    });
+  // Valida e devolve os dados para o pai.
+  const handleConfirm = () => {
+    if (isSuccess) {
+      if (!receiverName.trim()) {
+        Alert.alert(
+          "Campo obrigatório",
+          "O nome de quem recebeu é obrigatório."
+        );
+        return;
+      }
+      if (!photoDataUrl) {
+        Alert.alert("Foto obrigatória", "Anexe a foto de comprovação.");
+        return;
+      }
+      onConfirm({
+        status: "entregue",
+        nome_recebido: receiverName.trim(),
+        motivo: "",
+        foto_prova: photoDataUrl,
+        observacao: "",
+      });
+    } else {
+      if (!reason.trim()) {
+        Alert.alert(
+          "Campo obrigatório",
+          "O motivo é obrigatório quando a entrega não é realizada."
+        );
+        return;
+      }
+      if (!photoDataUrl) {
+        Alert.alert("Foto obrigatória", "Anexe a foto de comprovação.");
+        return;
+      }
+      onConfirm({
+        status: "nao_entregue",
+        nome_recebido: "",
+        motivo: reason.trim(),
+        foto_prova: photoDataUrl,
+        observacao: "",
+      });
+    }
     resetStateAndClose();
   };
 
+  // Reseta o estado e fecha o modal.
   const resetStateAndClose = () => {
     setIsSuccess(true);
     setReceiverName("");
     setReason("");
-    setPhoto(null);
+    setPhotoUri(null);
+    setPhotoDataUrl(null);
     setObservations("");
     onClose();
   };
@@ -99,7 +122,7 @@ export default function ConfirmationModal({
   return (
     <Modal
       animationType="slide"
-      transparent={true}
+      transparent
       visible={visible}
       onRequestClose={resetStateAndClose}
     >
@@ -122,9 +145,7 @@ export default function ConfirmationModal({
                   trackColor={{ false: "#767577", true: "#81b0ff" }}
                   thumbColor={isSuccess ? "#fca14e" : "#f4f3f4"}
                   ios_backgroundColor="#3e3e3e"
-                  onValueChange={() =>
-                    setIsSuccess((previousState: boolean) => !previousState)
-                  }
+                  onValueChange={() => setIsSuccess((prev) => !prev)}
                   value={isSuccess}
                 />
               </View>
@@ -140,19 +161,6 @@ export default function ConfirmationModal({
                     placeholderTextColor="#9ca3af"
                     value={receiverName}
                     onChangeText={setReceiverName}
-                  />
-
-                  <Text className="w-full text-left text-sm font-medium text-gray-400 mb-1 mt-3">
-                    Observações (Opcional)
-                  </Text>
-                  <TextInput
-                    className="w-full h-20 bg-gray-700 border border-gray-600 rounded-lg px-4 pt-3 text-base text-white"
-                    placeholder="Ex: Deixado na portaria com o Sr. João..."
-                    placeholderTextColor="#9ca3af"
-                    value={observations}
-                    onChangeText={setObservations}
-                    multiline
-                    textAlignVertical="top"
                   />
                 </>
               ) : (
@@ -173,28 +181,29 @@ export default function ConfirmationModal({
               )}
 
               <Text className="w-full text-left text-sm font-medium text-gray-400 mb-1 mt-3">
-                Adicionar Foto (Opcional)
+                Adicionar Foto (Obrigatório)
               </Text>
+
               <View className="flex-row w-full mt-1 items-center">
+                {/* Quadro abre a CÂMERA */}
                 <TouchableOpacity
                   className="w-20 h-20 rounded-lg border border-gray-600 bg-gray-700 justify-center items-center mr-4"
-                  onPress={handleChoosePhoto}
+                  onPress={openCamera}
                 >
-                  {photo ? (
+                  {photoUri ? (
                     <Image
-                      source={{ uri: photo }}
+                      source={{ uri: photoUri }}
                       className="w-full h-full rounded-lg"
                     />
                   ) : (
-                    <>
-                      <Feather name="camera" size={32} color="#9ca3af" />
-                    </>
+                    <Feather name="camera" size={32} color="#9ca3af" />
                   )}
                 </TouchableOpacity>
 
+                {/* Botão abre a GALERIA */}
                 <TouchableOpacity
                   className="flex-row items-center bg-gray-600 px-4 py-3 rounded-lg border border-gray-500"
-                  onPress={handleChoosePhoto}
+                  onPress={openGallery}
                 >
                   <Feather name="upload" size={18} color="#e5e7eb" />
                   <Text className="text-gray-200 ml-2 font-bold">

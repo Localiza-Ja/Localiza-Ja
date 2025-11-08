@@ -1,4 +1,5 @@
-// frontend/src/components/DeliveriesList.tsx
+//frontend/src/components/DeliveriesList.tsx
+
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -11,7 +12,6 @@ import {
   StyleSheet,
   Alert,
   LayoutAnimationConfig,
-  FlatList,
 } from "react-native";
 import { BottomSheetView, BottomSheetFlatList } from "@gorhom/bottom-sheet";
 import { Delivery } from "../types";
@@ -24,7 +24,9 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { EntregaStatus, AtualizarStatusDetails } from "../services/api";
+import { pickProofPhotoBase64 } from "../utils/pickProofPhotoBase64";
 
+// Habilita animações no Android.
 if (
   Platform.OS === "android" &&
   UIManager.setLayoutAnimationEnabledExperimental
@@ -32,6 +34,7 @@ if (
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
+// Layout animation linear para expandir/contrair itens.
 const CustomLayoutLinear: LayoutAnimationConfig = {
   duration: 400,
   create: {
@@ -73,6 +76,7 @@ type DeliveryListItemProps = {
   isLastItem: boolean;
 };
 
+// Item da lista de entregas (colapsado/expandido).
 const DeliveryListItem: React.FC<DeliveryListItemProps> = React.memo(
   ({
     item,
@@ -118,6 +122,7 @@ const DeliveryListItem: React.FC<DeliveryListItemProps> = React.memo(
       ? "text-yellow-600"
       : "text-gray-600";
 
+    // Anima rotação do chevron.
     const rotation = useSharedValue(isExpanded ? 180 : 0);
     useEffect(() => {
       rotation.value = withTiming(isExpanded ? 180 : 0, { duration: 500 });
@@ -275,7 +280,7 @@ const DeliveryListItem: React.FC<DeliveryListItemProps> = React.memo(
   }
 );
 
-// --- Componente Principal DeliveriesList ---
+// Lista principal de entregas (com bottom sheet e modal).
 export default function DeliveriesList({
   data,
   focusedDelivery,
@@ -290,7 +295,7 @@ export default function DeliveriesList({
     null
   );
 
-  // ✅ BLOQUEIO: não permitir iniciar uma nova se já existe alguma "em_rota"
+  // Impede iniciar uma nova quando já existe "em_rota".
   const handleStart = (event: GestureResponderEvent, item: Delivery) => {
     const jaTemEmRota = data.some((d) => d.status === "em_rota");
     if (jaTemEmRota) {
@@ -309,7 +314,7 @@ export default function DeliveriesList({
         {
           text: "Sim, Iniciar",
           onPress: () => {
-            onUpdateStatus(item.id, "em_rota", {});
+            onUpdateStatus(item.id, "em_rota", { kind: "em_rota" } as any);
             onStartNavigation();
           },
         },
@@ -317,25 +322,58 @@ export default function DeliveriesList({
     );
   };
 
+  // Abre modal para finalizar (entregue/não entregue).
   const handleFinish = (event: GestureResponderEvent, item: Delivery) => {
     setDeliveryToConfirm(item);
     setIsModalVisible(true);
   };
 
-  const handleConfirmDelivery = (details: {
+  // Helper: pergunta foto quando necessário (mantém legado).
+  const askForPhotoBase64 = () => pickProofPhotoBase64();
+
+  // Recebe dados do modal e dispara atualização.
+  const handleConfirmDelivery = async (details: {
     status: "entregue" | "nao_entregue";
     nome_recebido: string;
     motivo: string;
     foto_prova: string | null;
     observacao: string;
   }) => {
-    if (deliveryToConfirm) {
-      onUpdateStatus(deliveryToConfirm.id, details.status, details);
+    if (!deliveryToConfirm) return;
+
+    if (details.status === "entregue") {
+      if (!details.nome_recebido?.trim()) {
+        Alert.alert("Atenção", "Informe o nome de quem recebeu.");
+        return;
+      }
+      let foto = details.foto_prova || (await askForPhotoBase64());
+      if (!foto) return;
+
+      onUpdateStatus(deliveryToConfirm.id, "entregue", {
+        kind: "entregue",
+        nome_recebido: details.nome_recebido,
+        foto_prova: foto,
+      } as any);
+    } else {
+      if (!details.motivo?.trim()) {
+        Alert.alert("Atenção", "Informe o motivo da não entrega.");
+        return;
+      }
+      let foto = details.foto_prova || (await askForPhotoBase64());
+      if (!foto) return;
+
+      onUpdateStatus(deliveryToConfirm.id, "nao_entregue", {
+        kind: "nao_entregue",
+        motivo: details.motivo,
+        foto_prova: foto,
+      } as any);
     }
+
     setIsModalVisible(false);
     setDeliveryToConfirm(null);
   };
 
+  // Confirma o cancelamento da entrega.
   const handleCancel = (event: GestureResponderEvent, item: Delivery) => {
     Alert.alert(
       "Cancelar Entrega",
@@ -347,13 +385,15 @@ export default function DeliveriesList({
           style: "destructive",
           onPress: () =>
             onUpdateStatus(item.id, "cancelada", {
+              kind: "cancelada",
               motivo: "Cancelado pelo motorista",
-            }),
+            } as any),
         },
       ]
     );
   };
 
+  // Dispara animação e informa item focado ao pai.
   const handleItemPress = (item: Delivery) => {
     LayoutAnimation.configureNext(CustomLayoutLinear);
     onDeliveryPress(item);
@@ -428,10 +468,7 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     paddingBottom: 24,
   },
-  listHeader: {
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-  },
+  listHeader: { paddingVertical: 16, paddingHorizontal: 24 },
   headerText: {
     fontSize: 20,
     fontWeight: "bold",
@@ -445,8 +482,5 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
   },
-  listContentContainer: {
-    paddingBottom: 50,
-    backgroundColor: "transparent",
-  },
+  listContentContainer: { paddingBottom: 50, backgroundColor: "transparent" },
 });

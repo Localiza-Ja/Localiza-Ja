@@ -1,4 +1,5 @@
-// frontend/src/app/map.tsx
+//frontend/src/app/map.tsx
+
 import { router } from "expo-router";
 import {
   View,
@@ -27,19 +28,24 @@ import {
 } from "../services/api";
 import { Feather } from "@expo/vector-icons";
 
+// Imagens do app (logo e seta do motorista).
 const appLogo = require("../../assets/images/lj-logo.png");
 const navigationArrow = require("../../assets/images/navigation-arrow.png");
 
+// Tipos utilitários.
 type LocationCoords = Location.LocationObject["coords"];
 
+// Estilos de rota desenhada no mapa.
 const ROUTE_COLOR = "#4285F4";
 const ROUTE_OUTLINE_COLOR = "#FFFFFF";
 const ROUTE_WIDTH = 6;
 const ROUTE_OUTLINE_WIDTH = ROUTE_WIDTH + 4;
 
+// Chave da OpenRouteService para geocode e rotas.
 const ORS_API_KEY =
   "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImUwZGJlZDIyODYzZjQ2MmNhYWFlY2EyNGQ1MWFjMDI0IiwiaCI6Im11cm11cjY0In0=";
 
+// Coordenadas mockadas para alguns endereços.
 const mockedCoordinates: {
   [key: string]: { latitude: number; longitude: number };
 } = {
@@ -85,6 +91,7 @@ const mockedCoordinates: {
   },
 };
 
+// Geocoding: usa mock ou consulta ORS.
 const geocodeAddress = async (address: string) => {
   if (mockedCoordinates[address]) {
     return mockedCoordinates[address];
@@ -107,6 +114,7 @@ const geocodeAddress = async (address: string) => {
   }
 };
 
+// Pino personalizado de entrega.
 const CustomDeliveryMarker: React.FC<{ color: string }> = ({ color }) => (
   <View style={styles.deliveryPin}>
     <Feather name="map-pin" size={32} color={color} />
@@ -114,6 +122,7 @@ const CustomDeliveryMarker: React.FC<{ color: string }> = ({ color }) => (
   </View>
 );
 
+// Indicador fixo do motorista quando navegando.
 const DriverIndicator: React.FC = memo(
   () => {
     return (
@@ -123,6 +132,7 @@ const DriverIndicator: React.FC = memo(
   () => true
 );
 
+// Define zoom/câmera baseado na velocidade.
 const getSmartZoomLevel = (speed: number): number => {
   const speedKmh = speed * 3.6;
   if (speedKmh > 80) return 17;
@@ -132,6 +142,7 @@ const getSmartZoomLevel = (speed: number): number => {
 };
 
 export default function MapScreen() {
+  // Refs/estados principais do mapa e dados.
   const mapRef = useRef<MapView>(null);
   const [motorista, setMotorista] = useState<any>(null);
   const [selectedDelivery, setSelectedDelivery] = useState<Delivery | null>(
@@ -150,6 +161,7 @@ export default function MapScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isMapCentered, setIsMapCentered] = useState(true);
 
+  // Carrega sessão e entregas + geocode inicial.
   useEffect(() => {
     const carregarDadosIniciais = async () => {
       try {
@@ -166,8 +178,8 @@ export default function MapScreen() {
             const coords = await geocodeAddress(entrega.endereco_entrega);
             return {
               ...entrega,
-              latitude: coords?.latitude,
-              longitude: coords?.longitude,
+              latitude: coords?.latitude ?? null,
+              longitude: coords?.longitude ?? null,
             };
           })
         );
@@ -187,6 +199,7 @@ export default function MapScreen() {
     carregarDadosIniciais();
   }, []);
 
+  // Solicita permissões e observa posição do motorista.
   useEffect(() => {
     let subscription: Location.LocationSubscription | null = null;
     const requestPermissionsAndStartWatching = async () => {
@@ -224,6 +237,7 @@ export default function MapScreen() {
     };
   }, []);
 
+  // Busca rota ORS entre motorista e entrega selecionada.
   useEffect(() => {
     if (!driverLocation || !selectedDelivery || !selectedDelivery.latitude) {
       setRouteCoordinates([]);
@@ -252,6 +266,7 @@ export default function MapScreen() {
     fetchRoute();
   }, [driverLocation, selectedDelivery]);
 
+  // Atualiza câmera conforme modo de navegação/posicionamento.
   useEffect(() => {
     if (driverLocation && mapRef.current && isMapCentered) {
       const currentZoom = getSmartZoomLevel(driverLocation.coords.speed || 0);
@@ -272,6 +287,7 @@ export default function MapScreen() {
     }
   }, [isNavigating, driverLocation, isMapCentered]);
 
+  // Região inicial do mapa (Campinas).
   const initialRegion = {
     latitude: -22.9056,
     longitude: -47.0608,
@@ -279,6 +295,7 @@ export default function MapScreen() {
     longitudeDelta: 0.1,
   };
 
+  // Faz logout e limpa token.
   const handleLogout = async (forceLogout = false) => {
     if (!forceLogout) {
       try {
@@ -291,6 +308,7 @@ export default function MapScreen() {
     router.replace("/");
   };
 
+  // Seleção/deseleção de entrega com ajuste de câmera.
   function handleDeliveryPress(delivery: Delivery) {
     setIsNavigating(false);
 
@@ -316,15 +334,21 @@ export default function MapScreen() {
     }
   }
 
-  /**
-   * ✅ BLOQUEIO GLOBAL: impede iniciar "em_rota" se já houver outra entrega em rota.
-   */
+  // Verifica se um status exige coordenadas.
+  const statusExigeCoordenadas = (s: EntregaStatus) =>
+    s === "em_rota" ||
+    s === "entregue" ||
+    s === "cancelada" ||
+    s === "nao_entregue";
+
+  // Atualiza status no backend e sincroniza o state local.
   async function handleUpdateStatus(
     deliveryId: string,
     newStatus: EntregaStatus,
     details: AtualizarStatusDetails
   ) {
     try {
+      // Impede duas entregas simultâneas "em_rota".
       if (newStatus === "em_rota") {
         const outraEmRota = deliveriesData.find(
           (d) => d.status === "em_rota" && d.id !== deliveryId
@@ -338,13 +362,54 @@ export default function MapScreen() {
         }
       }
 
-      await updateStatusEntrega(deliveryId, newStatus, details);
+      // Injeta lat/long quando exigido.
+      let detailsToSend: AtualizarStatusDetails = { ...(details as any) };
+      if (statusExigeCoordenadas(newStatus)) {
+        if (!driverLocation) {
+          Alert.alert(
+            "Localização indisponível",
+            "Não foi possível obter sua localização atual."
+          );
+          return;
+        }
+        const { latitude, longitude } = driverLocation.coords;
+        (detailsToSend as any).latitude = latitude;
+        (detailsToSend as any).longitude = longitude;
+      }
 
-      const updatedDeliveries = deliveriesData.map((d) =>
-        d.id === deliveryId ? { ...d, status: newStatus, ...details } : d
-      );
+      // Chama API de atualização.
+      await updateStatusEntrega(deliveryId, newStatus, detailsToSend);
+
+      // Atualiza state local sem duplicar 'status'.
+      const updatedDeliveries = deliveriesData.map((d) => {
+        if (d.id !== deliveryId) return d;
+
+        const patch: Partial<Delivery> = {};
+        if ("latitude" in (detailsToSend as any)) {
+          patch.latitude = (detailsToSend as any).latitude;
+        }
+        if ("longitude" in (detailsToSend as any)) {
+          patch.longitude = (detailsToSend as any).longitude;
+        }
+        if (
+          newStatus === "entregue" &&
+          "nome_recebido" in (detailsToSend as any)
+        ) {
+          patch.nome_recebido = (detailsToSend as any).nome_recebido ?? null;
+        }
+        if (
+          (newStatus === "cancelada" || newStatus === "nao_entregue") &&
+          "motivo" in (detailsToSend as any)
+        ) {
+          patch.motivo = (detailsToSend as any).motivo ?? null;
+        }
+
+        return { ...d, status: newStatus, ...patch };
+      });
+
       setDeliveriesData(updatedDeliveries);
 
+      // Pós-ação quando finaliza/cancela a entrega selecionada.
       if (selectedDelivery?.id === deliveryId) {
         if (["entregue", "cancelada", "nao_entregue"].includes(newStatus)) {
           setRouteCoordinates([]);
@@ -360,26 +425,29 @@ export default function MapScreen() {
         "Erro ao atualizar status:",
         error.response?.data || error.message
       );
-      Alert.alert("Erro", "Não foi possível atualizar o status.");
-    }
-  }
-
-  function handleStartNavigation() {
-    if (selectedDelivery && driverLocation && mapRef.current) {
-      setIsNavigating(true);
-      setIsMapCentered(true);
-      console.log(
-        "INÍCIO DA NAVEGAÇÃO: isNavigating: true, isMapCentered: true"
+      Alert.alert(
+        "Erro",
+        "Não foi possível atualizar o status. (Obs.: 'entregue' e 'nao_entregue' exigem foto_prova no backend.)"
       );
     }
   }
 
+  // Inicia modo navegação (trava câmera no motorista).
+  function handleStartNavigation() {
+    if (selectedDelivery && driverLocation && mapRef.current) {
+      setIsNavigating(true);
+      setIsMapCentered(true);
+    }
+  }
+
+  // Re-centraliza a câmera no motorista.
   const handleCenterMap = () => {
     if (driverLocation && mapRef.current) {
       setIsMapCentered(true);
     }
   };
 
+  // Splash/loader inicial.
   if (isLoading) {
     return (
       <View
@@ -395,6 +463,7 @@ export default function MapScreen() {
     );
   }
 
+  // Ícone do botão de recentralizar.
   const centerIconName = isNavigating ? "navigation" : "compass";
 
   return (

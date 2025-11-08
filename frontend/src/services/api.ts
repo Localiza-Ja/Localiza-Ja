@@ -1,44 +1,29 @@
-// frontend/src/services/api.ts
-import axios, { AxiosError } from "axios";
+//frontend/src/services/api.ts
+
+import axios, { AxiosHeaders } from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-const baseURL = "http://192.168.15.8:5000";
-const TOKEN_KEY = "@user_token";
-
+// Configura baseURL e timeout do backend Flask.
 export const api = axios.create({
-  baseURL,
+  baseURL: "http://192.168.15.3:5000",
   timeout: 15000,
-  headers: { "Content-Type": "application/json" },
 });
 
-// Interceptor de Request: adiciona token
+// Injeta JWT automaticamente nas requisições.
 api.interceptors.request.use(async (config) => {
-  const token = await AsyncStorage.getItem(TOKEN_KEY);
+  const token = await AsyncStorage.getItem("@user_token");
   if (token) {
-    config.headers = config.headers ?? {};
-    (config.headers as any).Authorization = `Bearer ${token}`;
+    if (!config.headers) config.headers = new AxiosHeaders();
+    const headers = config.headers as AxiosHeaders & Record<string, any>;
+    if (typeof (headers as any).set === "function") {
+      headers.set("Authorization", `Bearer ${token}`);
+    } else {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
   }
   return config;
 });
 
-// Interceptor de Response: loga erros no terminal
-api.interceptors.response.use(
-  (res) => res,
-  (error: AxiosError<any>) => {
-    console.log(
-      "[API ERROR]",
-      error.config?.method?.toUpperCase(),
-      error.config?.url,
-      "| Status:",
-      error.response?.status,
-      "|",
-      error.response?.data || error.message
-    );
-    return Promise.reject(error);
-  }
-);
-
-// Tipos fortes
 export type EntregaStatus =
   | "pendente"
   | "em_rota"
@@ -46,126 +31,90 @@ export type EntregaStatus =
   | "cancelada"
   | "nao_entregue";
 
-export type AtualizarStatusDetails = {
-  nome_recebido?: string;
-  motivo?: string;
+export type Delivery = {
+  id: string;
+  motorista_id: string;
+  endereco_entrega: string;
+  numero_pedido: string;
+  status: EntregaStatus;
+  nome_cliente?: string;
   observacao?: string;
-  foto_prova?: string | null;
+  motivo?: string | null;
+  nome_recebido?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
 };
 
-// ===================== AUTENTICAÇÃO =====================
-export async function loginMotorista(cnh: string, placa_veiculo: string) {
-  console.log("[LOGIN] Tentando login para CNH:", cnh, "Placa:", placa_veiculo);
-  const res = await api.post("/usuarios/login", { cnh, placa_veiculo });
-  const token = (res.data as any)?.access_token;
-  if (token) {
-    await AsyncStorage.setItem(TOKEN_KEY, token);
-    console.log("[LOGIN] Sucesso. Token salvo no AsyncStorage.");
-  }
-  return res;
+export type Usuario = {
+  id: string;
+  nome: string;
+  placa_veiculo: string;
+  cnh: string;
+  telefone?: string;
+};
+
+// Detalhes enviados por status (lat/long são injetados no map.tsx).
+export type AtualizarStatusDetails =
+  | { kind: "em_rota"; latitude?: number; longitude?: number }
+  | {
+      kind: "entregue";
+      nome_recebido: string;
+      foto_prova?: string;
+      latitude?: number;
+      longitude?: number;
+    }
+  | {
+      kind: "cancelada";
+      motivo?: string;
+      latitude?: number;
+      longitude?: number;
+    }
+  | {
+      kind: "nao_entregue";
+      motivo: string;
+      foto_prova?: string;
+      latitude?: number;
+      longitude?: number;
+    };
+
+// Endpoints de autenticação e dados.
+export async function loginMotorista(cnh: string, placa: string) {
+  return api.post("/usuarios/login", { cnh, placa_veiculo: placa });
+}
+
+export async function getSession() {
+  return api.get("/usuarios/session");
 }
 
 export async function logoutMotorista() {
-  console.log("[LOGOUT] Iniciando logout...");
-  try {
-    await api.post("/usuarios/logout");
-    console.log("[LOGOUT] Token invalidado no backend.");
-  } catch (error) {
-    console.warn("[LOGOUT] Erro ao deslogar:", (error as any).message);
-  } finally {
-    await AsyncStorage.removeItem(TOKEN_KEY);
-    console.log("[LOGOUT] Token removido do AsyncStorage.");
-  }
+  return api.post("/usuarios/logout");
 }
 
-// ===================== SESSÃO =====================
-export async function getSession() {
-  const res = await api.get("/usuarios/session");
-  const newToken = (res.data as any)?.access_token;
-  if (newToken) {
-    await AsyncStorage.setItem(TOKEN_KEY, newToken);
-    console.log("[SESSION] Sessão válida. Token renovado.");
-  }
-  console.log("[SESSION] Motorista logado:", res.data.Usuario?.nome);
-  return res;
-}
-
-// ===================== ENTREGAS =====================
 export async function getEntregasPorMotorista(motoristaId: string) {
-  try {
-    console.log("[ENTREGAS] Buscando entregas do motorista ID:", motoristaId);
-    const res = await api.get(`/entregas/motorista/${motoristaId}`);
-    console.log(
-      "[ENTREGAS] Total de entregas:",
-      res.data?.Entregas?.length || 0
-    );
-    return res;
-  } catch (err: any) {
-    if (err?.response?.status === 404) {
-      console.log("[ENTREGAS] Nenhuma entrega encontrada (404).");
-      return { data: { Entregas: [] } } as any;
-    }
-    throw err;
-  }
+  return api.get(`/entregas/motorista/${motoristaId}`);
 }
 
-// ===================== STATUS =====================
+// Atualiza status de entrega (monta payload conforme o status).
 export async function updateStatusEntrega(
   entregaId: string,
   status: EntregaStatus,
-  details: AtualizarStatusDetails = {}
+  details: AtualizarStatusDetails
 ) {
-  console.log(
-    `[ENTREGA] Atualizando status da entrega ${entregaId} para "${status}"`
-  );
+  const base: any = {
+    status,
+    latitude: details.latitude,
+    longitude: details.longitude,
+  };
 
-  // Validações locais
-  if (status === "entregue" && !details.nome_recebido?.trim()) {
-    throw new Error('Para "entregue", o campo "nome_recebido" é obrigatório.');
-  }
-  if (
-    (status === "cancelada" || status === "nao_entregue") &&
-    !details.motivo?.trim()
-  ) {
-    throw new Error(`Para "${status}", o campo "motivo" é obrigatório.`);
-  }
-
-  const body: any = { status };
-  if (details.nome_recebido) body.nome_recebido = details.nome_recebido;
-  if (details.motivo) body.motivo = details.motivo;
-  if (details.foto_prova) body.foto_prova = details.foto_prova;
-  if (details.observacao) body.observacao = details.observacao;
-
-  const res = await api.put(`/entregas/${entregaId}/status`, body);
-
-  // Log contextual
-  switch (status) {
-    case "em_rota":
-      console.log(`[ENTREGA] 🚚 Entrega ${entregaId} iniciada (em rota).`);
-      break;
-    case "entregue":
-      console.log(`[ENTREGA] ✅ Entrega ${entregaId} finalizada com sucesso.`);
-      break;
-    case "nao_entregue":
-      console.log(
-        `[ENTREGA] ⚠️ Entrega ${entregaId} NÃO realizada. Motivo: ${details.motivo}`
-      );
-      break;
-    case "cancelada":
-      console.log(
-        `[ENTREGA] ❌ Entrega ${entregaId} cancelada. Motivo: ${details.motivo}`
-      );
-      break;
-    default:
-      console.log(`[ENTREGA] Status ${status} atualizado.`);
+  if (status === "entregue") {
+    base.nome_recebido = (details as any).nome_recebido;
+    base.foto_prova = (details as any).foto_prova;
+  } else if (status === "cancelada") {
+    base.motivo = (details as any).motivo;
+  } else if (status === "nao_entregue") {
+    base.motivo = (details as any).motivo;
+    base.foto_prova = (details as any).foto_prova;
   }
 
-  return res;
-}
-
-// ===================== BUSCAR POR NÚMERO =====================
-export async function getEntregaPorNumero(numeroPedido: string) {
-  console.log("[ENTREGA] Buscando por número do pedido:", numeroPedido);
-  const res = await api.get(`/entregas/numero_pedido/${numeroPedido}`);
-  return res;
+  return api.put(`/entregas/${entregaId}/status`, base);
 }

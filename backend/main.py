@@ -129,5 +129,21 @@ def seed_db_command():
     from seed import seed_data # Adicione o import aqui dentro para evitar importação circular
     seed_data()
 
+# main.py (final do arquivo)
 if __name__ == "__main__":
-    app.run(host='0.0.0.0', debug=True)
+    host = "0.0.0.0"
+    port = 5000
+
+    # opcional: imprime o IP LAN antes de subir
+    try:
+        import socket
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        lan_ip = s.getsockname()[0]
+        s.close()
+        print(f"\nBackend em: http://{lan_ip}:{port}  (LAN)  |  http://127.0.0.1:{port} (localhost)\n")
+    except Exception:
+        print(f"\nBackend em: http://127.0.0.1:{port}\n")
+
+    # Evita processos duplicados e warnings repetidos no Windows
+    app.run(host=host, port=port, debug=True, use_reloader=False)
