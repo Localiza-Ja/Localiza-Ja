@@ -19,6 +19,7 @@ type DeliveryPanelProps = {
   ) => void;
   onLogout: () => void;
   onStartNavigation: () => void;
+  isLoadingList: boolean;
 };
 
 export default function DeliveryPanel({
@@ -28,6 +29,7 @@ export default function DeliveryPanel({
   onUpdateStatus,
   onLogout,
   onStartNavigation,
+  isLoadingList,
 }: DeliveryPanelProps) {
   // BottomSheet: controle de posição/abertura.
   const bottomSheetRef = useRef<BottomSheet>(null);
@@ -102,6 +104,7 @@ export default function DeliveryPanel({
         onLogout={onLogout}
         onStartNavigation={handleStartAndCollapse}
         simultaneousHandlers={bottomSheetRef}
+        isLoading={isLoadingList}
       />
     </BottomSheet>
   );

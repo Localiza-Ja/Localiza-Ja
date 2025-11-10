@@ -18,11 +18,13 @@ import { Delivery } from "../types";
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import Svg, { Line } from "react-native-svg";
 import ConfirmationModal from "./ConfirmationModal";
-import Animated, {
+import AnimatedChevron, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
 } from "react-native-reanimated";
+import { Animated as RNAnimated, Easing } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { EntregaStatus, AtualizarStatusDetails } from "../services/api";
 import { pickProofPhotoBase64 } from "../utils/pickProofPhotoBase64";
 
@@ -60,6 +62,7 @@ type DeliveriesListProps = {
     newStatus: EntregaStatus,
     details: AtualizarStatusDetails
   ) => void;
+  isLoading: boolean;
   onStartNavigation: () => void;
   onLogout: () => void;
   simultaneousHandlers?: any;
@@ -74,6 +77,43 @@ type DeliveryListItemProps = {
   handleFinish: (event: GestureResponderEvent, item: Delivery) => void;
   handleCancel: (event: GestureResponderEvent, item: Delivery) => void;
   isLastItem: boolean;
+  isLoading: boolean;
+};
+
+// ---------- SKELETON / SHIMMER ----------
+const AnimatedGradient = RNAnimated.createAnimatedComponent(LinearGradient);
+const ShimmerBlock: React.FC<{ style?: any }> = ({ style }) => {
+  const translateX = React.useRef(new RNAnimated.Value(-150)).current;
+
+  React.useEffect(() => {
+    const loop = RNAnimated.loop(
+      RNAnimated.timing(translateX, {
+        toValue: 300,
+        duration: 1200,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      })
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [translateX]);
+
+  return (
+    <View style={[style, { overflow: "hidden", backgroundColor: "#E5E7EB" }]}>
+      <AnimatedGradient
+        colors={["#E5E7EB", "#F3F4F6", "#E5E7EB"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={[
+          StyleSheet.absoluteFillObject,
+          {
+            width: "60%",
+            transform: [{ translateX }],
+          },
+        ]}
+      />
+    </View>
+  );
 };
 
 // Item da lista de entregas (colapsado/expandido).
@@ -87,6 +127,7 @@ const DeliveryListItem: React.FC<DeliveryListItemProps> = React.memo(
     handleFinish,
     handleCancel,
     isLastItem,
+    isLoading,
   }) => {
     const isActive = item.status === "em_rota";
     const isFinished = item.status === "entregue";
@@ -122,7 +163,7 @@ const DeliveryListItem: React.FC<DeliveryListItemProps> = React.memo(
       ? "text-yellow-600"
       : "text-gray-600";
 
-    // Anima rotação do chevron.
+    // Anima rotação do chevron (Reanimated).
     const rotation = useSharedValue(isExpanded ? 180 : 0);
     useEffect(() => {
       rotation.value = withTiming(isExpanded ? 180 : 0, { duration: 500 });
@@ -131,150 +172,215 @@ const DeliveryListItem: React.FC<DeliveryListItemProps> = React.memo(
       transform: [{ rotate: `${rotation.value}deg` }],
     }));
 
+    // Fade entre skeleton e conteúdo
+    const [showSkeleton, setShowSkeleton] = React.useState(isLoading);
+    const skeletonOpacity = React.useRef(
+      new RNAnimated.Value(isLoading ? 1 : 0)
+    ).current;
+    const contentOpacity = React.useRef(
+      new RNAnimated.Value(isLoading ? 0 : 1)
+    ).current;
+
+    useEffect(() => {
+      if (isLoading) {
+        setShowSkeleton(true);
+        skeletonOpacity.setValue(1);
+        contentOpacity.setValue(0);
+      } else {
+        RNAnimated.parallel([
+          RNAnimated.timing(skeletonOpacity, {
+            toValue: 0,
+            duration: 350,
+            easing: Easing.inOut(Easing.cubic),
+            useNativeDriver: true,
+          }),
+          RNAnimated.timing(contentOpacity, {
+            toValue: 1,
+            duration: 350,
+            easing: Easing.inOut(Easing.cubic),
+            useNativeDriver: true,
+          }),
+        ]).start(() => {
+          setShowSkeleton(false);
+        });
+      }
+    }, [isLoading, skeletonOpacity, contentOpacity]);
+
     return (
-      <View className={`px-4 ${itemOpacity}`}>
-        <View style={styles.itemRow}>
-          <View style={styles.leftColumn}>
-            <TouchableOpacity onPress={() => onItemPress(item)}>
-              <View
-                className={`w-8 h-8 rounded-full justify-center items-center ${circleBgColor}`}
+      <View className={`px-4 ${itemOpacity}`} style={{ position: "relative" }}>
+        {/* SKELETON por cima do conteúdo, com o MESMO layout do item */}
+        {showSkeleton && (
+          <RNAnimated.View
+            style={[
+              StyleSheet.absoluteFillObject,
+              {
+                opacity: skeletonOpacity,
+                justifyContent: "center",
+                alignItems: "center",
+                transform: [{ translateX: 11 }],
+              },
+            ]}
+            pointerEvents="none"
+          >
+            <View style={styles.itemRow}>
+              <View style={styles.leftColumn}>
+                <ShimmerBlock style={styles.skeletonCircle} />
+              </View>
+              <View style={styles.rightColumn}>
+                <ShimmerBlock style={styles.skeletonLinePrimary} />
+                <ShimmerBlock style={styles.skeletonLineSecondary} />
+              </View>
+            </View>
+          </RNAnimated.View>
+        )}
+
+        {/* CONTEÚDO REAL */}
+        <RNAnimated.View style={{ opacity: contentOpacity }}>
+          <View style={styles.itemRow}>
+            <View style={styles.leftColumn}>
+              <TouchableOpacity onPress={() => onItemPress(item)}>
+                <View
+                  className={`w-8 h-8 rounded-full justify-center items-center ${circleBgColor}`}
+                >
+                  <Text className={`font-bold ${circleTextColor}`}>
+                    {index + 1}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+
+              {isExpanded && !isLastItem && (
+                <View style={styles.lineAndIconContainer}>
+                  <Svg height="100%" width="100%" style={styles.svgContainer}>
+                    <Line
+                      x1="50%"
+                      y1="0"
+                      x2="50%"
+                      y2="100%"
+                      stroke={statusColorCode}
+                      strokeWidth="1.5"
+                      strokeDasharray="4, 4"
+                    />
+                  </Svg>
+                  <AnimatedChevron.View
+                    style={[styles.iconContainer, animatedStyle]}
+                  >
+                    <MaterialCommunityIcons
+                      name="triangle-small-up"
+                      size={18}
+                      color={statusColorCode}
+                    />
+                  </AnimatedChevron.View>
+                </View>
+              )}
+            </View>
+
+            <View style={styles.rightColumn}>
+              <TouchableOpacity
+                onPress={() => onItemPress(item)}
+                activeOpacity={0.7}
               >
-                <Text className={`font-bold ${circleTextColor}`}>
-                  {index + 1}
-                </Text>
-              </View>
-            </TouchableOpacity>
+                {isExpanded ? (
+                  <View className="space-y-4">
+                    <View>
+                      <Text className="text-lg font-bold text-gray-900">
+                        {item.endereco_entrega}
+                      </Text>
+                    </View>
 
-            {isExpanded && !isLastItem && (
-              <View style={styles.lineAndIconContainer}>
-                <Svg height="100%" width="100%" style={styles.svgContainer}>
-                  <Line
-                    x1="50%"
-                    y1="0"
-                    x2="50%"
-                    y2="100%"
-                    stroke={statusColorCode}
-                    strokeWidth="1.5"
-                    strokeDasharray="4, 4"
-                  />
-                </Svg>
-                <Animated.View style={[styles.iconContainer, animatedStyle]}>
-                  <MaterialCommunityIcons
-                    name="triangle-small-up"
-                    size={18}
-                    color={statusColorCode}
-                  />
-                </Animated.View>
-              </View>
-            )}
-          </View>
+                    <View className="flex-row items-center mt-4">
+                      <View className="p-2 bg-gray-300 rounded-full mr-3">
+                        <Feather name="user" size={24} color="#374151" />
+                      </View>
+                      <Text className="text-lg font-bold text-gray-800">
+                        {item.nome_cliente}
+                      </Text>
+                    </View>
 
-          <View style={styles.rightColumn}>
-            <TouchableOpacity
-              onPress={() => onItemPress(item)}
-              activeOpacity={0.7}
-            >
-              {isExpanded ? (
-                <View className="space-y-4">
+                    <View className="space-y-2 pl-1">
+                      {item.observacao && (
+                        <Text className="text-sm text-gray-600">
+                          Obs.:{" "}
+                          <Text className="text-base text-gray-800">
+                            {item.observacao}
+                          </Text>
+                        </Text>
+                      )}
+
+                      <Text className="text-sm text-gray-600">
+                        Número do Pedido:{" "}
+                        <Text className="text-base text-gray-800">
+                          {item.numero_pedido}
+                        </Text>
+                      </Text>
+
+                      <Text className="text-sm text-gray-600">
+                        Status da entrega:{" "}
+                        <Text
+                          className={`text-base font-bold ${statusTextColorClass}`}
+                        >
+                          {item.status}
+                        </Text>
+                      </Text>
+                    </View>
+
+                    <View className="pt-4 mt-3">
+                      {!isDone && (
+                        <View className="flex-row">
+                          {item.status === "pendente" && (
+                            <TouchableOpacity
+                              className="bg-orange-500 h-12 rounded-xl flex-1 flex-row justify-center items-center mr-2"
+                              onPress={(e) => handleStart(e, item)}
+                            >
+                              <Feather name="truck" size={18} color="white" />
+                              <Text className="text-white text-center font-bold ml-2">
+                                Iniciar Entrega
+                              </Text>
+                            </TouchableOpacity>
+                          )}
+
+                          {item.status === "em_rota" && (
+                            <TouchableOpacity
+                              className="bg-green-600 h-12 rounded-xl flex-1 flex-row justify-center items-center mr-2"
+                              onPress={(e) => handleFinish(e, item)}
+                            >
+                              <Feather
+                                name="check-circle"
+                                size={18}
+                                color="white"
+                              />
+                              <Text className="text-white text-center font-bold ml-2">
+                                Finalizar Entrega
+                              </Text>
+                            </TouchableOpacity>
+                          )}
+
+                          <TouchableOpacity
+                            className="bg-red-600 h-12 rounded-xl flex-1 flex-row justify-center items-center"
+                            onPress={(e) => handleCancel(e, item)}
+                          >
+                            <Feather name="x-circle" size={18} color="white" />
+                            <Text className="text-white text-center font-bold ml-2">
+                              Cancelar
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                ) : (
                   <View>
                     <Text className="text-lg font-bold text-gray-900">
                       {item.endereco_entrega}
                     </Text>
-                  </View>
-
-                  <View className="flex-row items-center mt-4">
-                    <View className="p-2 bg-gray-300 rounded-full mr-3">
-                      <Feather name="user" size={24} color="#374151" />
-                    </View>
-                    <Text className="text-lg font-bold text-gray-800">
+                    <Text className="text-base text-gray-700">
                       {item.nome_cliente}
                     </Text>
                   </View>
-
-                  <View className="space-y-2 pl-1">
-                    {item.observacao && (
-                      <Text className="text-sm text-gray-600">
-                        Obs.:{" "}
-                        <Text className="text-base text-gray-800">
-                          {item.observacao}
-                        </Text>
-                      </Text>
-                    )}
-
-                    <Text className="text-sm text-gray-600">
-                      Número do Pedido:{" "}
-                      <Text className="text-base text-gray-800">
-                        {item.numero_pedido}
-                      </Text>
-                    </Text>
-
-                    <Text className="text-sm text-gray-600">
-                      Status da entrega:{" "}
-                      <Text
-                        className={`text-base font-bold ${statusTextColorClass}`}
-                      >
-                        {item.status}
-                      </Text>
-                    </Text>
-                  </View>
-
-                  <View className="pt-4 mt-3">
-                    {!isDone && (
-                      <View className="flex-row">
-                        {item.status === "pendente" && (
-                          <TouchableOpacity
-                            className="bg-orange-500 h-12 rounded-xl flex-1 flex-row justify-center items-center mr-2"
-                            onPress={(e) => handleStart(e, item)}
-                          >
-                            <Feather name="truck" size={18} color="white" />
-                            <Text className="text-white text-center font-bold ml-2">
-                              Iniciar Entrega
-                            </Text>
-                          </TouchableOpacity>
-                        )}
-
-                        {item.status === "em_rota" && (
-                          <TouchableOpacity
-                            className="bg-green-600 h-12 rounded-xl flex-1 flex-row justify-center items-center mr-2"
-                            onPress={(e) => handleFinish(e, item)}
-                          >
-                            <Feather
-                              name="check-circle"
-                              size={18}
-                              color="white"
-                            />
-                            <Text className="text-white text-center font-bold ml-2">
-                              Finalizar Entrega
-                            </Text>
-                          </TouchableOpacity>
-                        )}
-
-                        <TouchableOpacity
-                          className="bg-red-600 h-12 rounded-xl flex-1 flex-row justify-center items-center"
-                          onPress={(e) => handleCancel(e, item)}
-                        >
-                          <Feather name="x-circle" size={18} color="white" />
-                          <Text className="text-white text-center font-bold ml-2">
-                            Cancelar
-                          </Text>
-                        </TouchableOpacity>
-                      </View>
-                    )}
-                  </View>
-                </View>
-              ) : (
-                <View>
-                  <Text className="text-lg font-bold text-gray-900">
-                    {item.endereco_entrega}
-                  </Text>
-                  <Text className="text-base text-gray-700">
-                    {item.nome_cliente}
-                  </Text>
-                </View>
-              )}
-            </TouchableOpacity>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
+        </RNAnimated.View>
       </View>
     );
   }
@@ -288,6 +394,7 @@ export default function DeliveriesList({
   onUpdateStatus,
   onStartNavigation,
   onLogout,
+  isLoading,
   simultaneousHandlers,
 }: DeliveriesListProps) {
   const [isModalVisible, setIsModalVisible] = useState(false);
@@ -418,6 +525,7 @@ export default function DeliveriesList({
             handleFinish={handleFinish}
             handleCancel={handleCancel}
             isLastItem={index === data.length - 1}
+            isLoading={isLoading}
           />
         )}
         style={styles.flatListStyle}
@@ -442,8 +550,8 @@ const styles = StyleSheet.create({
   listContainer: {
     flex: 1,
     backgroundColor: "#1F2937",
-    borderTopLeftRadius: 40,
-    borderTopRightRadius: 40,
+    borderTopLeftRadius: 35,
+    borderTopRightRadius: 35,
     overflow: "hidden",
   },
   itemRow: { flexDirection: "row" },
@@ -483,4 +591,22 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 30,
   },
   listContentContainer: { paddingBottom: 50, backgroundColor: "transparent" },
+
+  // Skeleton
+  skeletonCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+  },
+  skeletonLinePrimary: {
+    height: 16,
+    borderRadius: 8,
+    marginBottom: 6,
+    width: "80%",
+  },
+  skeletonLineSecondary: {
+    height: 14,
+    borderRadius: 7,
+    width: "60%",
+  },
 });

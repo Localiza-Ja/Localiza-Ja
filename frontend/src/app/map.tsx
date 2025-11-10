@@ -41,6 +41,8 @@ const ROUTE_OUTLINE_COLOR = "#FFFFFF";
 const ROUTE_WIDTH = 6;
 const ROUTE_OUTLINE_WIDTH = ROUTE_WIDTH + 4;
 
+const MIN_INITIAL_LOADING_MS = 1050;
+
 // Chave da OpenRouteService para geocode e rotas.
 const ORS_API_KEY =
   "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImUwZGJlZDIyODYzZjQ2MmNhYWFlY2EyNGQ1MWFjMDI0IiwiaCI6Im11cm11cjY0In0=";
@@ -164,6 +166,7 @@ export default function MapScreen() {
   // Carrega sessão e entregas + geocode inicial.
   useEffect(() => {
     const carregarDadosIniciais = async () => {
+      const startTime = Date.now();
       try {
         const sessionResponse = await getSession();
         const motoristaLogado = sessionResponse.data.Usuario;
@@ -193,7 +196,9 @@ export default function MapScreen() {
         Alert.alert("Sessão Expirada", "Faça login novamente.");
         await handleLogout(true);
       } finally {
-        setIsLoading(false);
+        const elapsed = Date.now() - startTime;
+        const remaining = Math.max(0, MIN_INITIAL_LOADING_MS - elapsed);
+        setTimeout(() => setIsLoading(false), remaining);
       }
     };
     carregarDadosIniciais();
@@ -447,22 +452,6 @@ export default function MapScreen() {
     }
   };
 
-  // Splash/loader inicial.
-  if (isLoading) {
-    return (
-      <View
-        style={{
-          flex: 1,
-          justifyContent: "center",
-          alignItems: "center",
-          backgroundColor: "#21222D",
-        }}
-      >
-        <ActivityIndicator size="large" color="#FFFFFF" />
-      </View>
-    );
-  }
-
   // Ícone do botão de recentralizar.
   const centerIconName = isNavigating ? "navigation" : "compass";
 
@@ -580,6 +569,7 @@ export default function MapScreen() {
         onUpdateStatus={handleUpdateStatus}
         onLogout={handleLogout}
         onStartNavigation={handleStartNavigation}
+        isLoadingList={isLoading}
       />
     </View>
   );
