@@ -768,17 +768,7 @@ class EntregaStatusResource(Resource):
             if novo_status == StatusEntrega.PENDENTE:
                 pass
             elif novo_status == StatusEntrega.EM_ROTA:
-                localizacao = Localizacao(
-                    motorista_id=entrega.motorista_id,
-                    entrega_id=entrega.id,
-                    data_hora=db.func.current_timestamp()
-                )
-                localização_motorista = LocalizacaoMotoristaResource(
-                    motorista_id=entrega.motorista_id
-                )
-                localização_motorista.get()
-                print(localização_motorista)
-                
+                pass
             elif novo_status == StatusEntrega.ENTREGUE:
                 if not dados.get('nome_recebido') or not foto_prova:
                     raise ValueError(gettext("Nome recebido e foto de prova são obrigatórios para status 'entregue'."))
