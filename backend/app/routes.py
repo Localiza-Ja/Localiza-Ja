@@ -495,7 +495,6 @@ class EntregaResource(Resource):
                 motorista_id (str): ID do motorista.
                 endereco_entrega (str): Endereço de entrega.
                 nome_cliente (str): Nome do cliente.
-                observacao (str, optional): Observações.
                 foto_prova (str, optional): Foto de prova (base64 ou nome de arquivo).
 
         Returns:
@@ -728,8 +727,6 @@ class EntregaStatusResource(Resource):
     args.add_argument('nome_recebido', type=validar_max_length(255), required=False, help='Nome recebido inválido')
     args.add_argument('motivo', type=validar_max_length(255), required=False, help='Motivo inválido')
     args.add_argument('foto_prova', type=str, required=False, help='Foto de prova inválida')
-    args.add_argument('latitude', type=validar_range(-90, 90), required=False, help='Latitude inválida')
-    args.add_argument('longitude', type=validar_range(-180, 180), required=False, help='Longitude inválida')
 
     @jwt_required()
     def put(self, entrega_id):
@@ -764,8 +761,6 @@ class EntregaStatusResource(Resource):
             if str(entrega.motorista_id) != current_user_id:
                 logger.warning(f"Acesso não autorizado para entrega {entrega_id} por usuário {current_user_id}")
                 return {"error": gettext("Acesso não autorizado: você não é o motorista desta entrega."), "status": False}, 401
-            latitude = dados.get('latitude')
-            longitude = dados.get('longitude')
             foto_prova = dados.get('foto_prova')
             if foto_prova:
                 foto_prova = processar_foto_prova(foto_prova, entrega_id)
@@ -773,57 +768,26 @@ class EntregaStatusResource(Resource):
             if novo_status == StatusEntrega.PENDENTE:
                 pass
             elif novo_status == StatusEntrega.EM_ROTA:
-                if latitude is None or longitude is None:
-                    raise ValueError(gettext("Latitude e longitude são obrigatórios para status 'em_rota'."))
-                localizacao = Localizacao(
-                    motorista_id=entrega.motorista_id,
-                    entrega_id=entrega.id,
-                    latitude=latitude,
-                    longitude=longitude,
-                    data_hora=db.func.current_timestamp()
-                )
-                db.session.add(localizacao)
+                pass
             elif novo_status == StatusEntrega.ENTREGUE:
                 if not dados.get('nome_recebido') or not foto_prova:
                     raise ValueError(gettext("Nome recebido e foto de prova são obrigatórios para status 'entregue'."))
                 entrega.nome_recebido = dados['nome_recebido']
                 entrega.foto_prova = foto_prova
-                if latitude is None or longitude is None:
-                    raise ValueError(gettext("Latitude e longitude são obrigatórios para status finais."))
-                localizacao = Localizacao(
-                    motorista_id=entrega.motorista_id,
-                    entrega_id=entrega.id,
-                    latitude=latitude,
-                    longitude=longitude,
-                    data_hora=db.func.current_timestamp()
-                )
-                db.session.add(localizacao)
+                
             elif novo_status == StatusEntrega.CANCELADA:
-                if latitude is None or longitude is None:
-                    raise ValueError(gettext("Latitude e longitude são obrigatórios para status finais."))
-                localizacao = Localizacao(
-                    motorista_id=entrega.motorista_id,
-                    entrega_id=entrega.id,
-                    latitude=latitude,
-                    longitude=longitude,
-                    data_hora=db.func.current_timestamp()
-                )
-                db.session.add(localizacao)
+                pass
+            
             elif novo_status == StatusEntrega.NAO_ENTREGUE:
-                if not dados.get('motivo') or not foto_prova:
-                    raise ValueError(gettext("Motivo e foto de prova são obrigatórios para status '{}'.").format(novo_status.value))
+                if not dados.get('motivo'):
+                    raise ValueError(gettext("Motivo é obrigatório para status '{}'.").format(novo_status.value))
                 entrega.motivo = dados['motivo']
-                entrega.foto_prova = foto_prova
-                if latitude is None or longitude is None:
-                    raise ValueError(gettext("Latitude e longitude são obrigatórios para status finais."))
-                localizacao = Localizacao(
-                    motorista_id=entrega.motorista_id,
-                    entrega_id=entrega.id,
-                    latitude=latitude,
-                    longitude=longitude,
-                    data_hora=db.func.current_timestamp()
-                )
-                db.session.add(localizacao)
+                
+                if foto_prova is None:
+                    entrega.foto_prova = ""
+                else:
+                    entrega.foto_prova = foto_prova
+                
             entrega.status = novo_status
             db.session.commit()
             logger.info(f"Status da entrega atualizado: {entrega_id} para {novo_status.value}")
@@ -1070,8 +1034,15 @@ class LocalizacaoIoTResource(Resource):
             """
             entrega = (
                 Entrega.query
-                .filter_by(motorista_id=dados['motorista_id'], status=StatusEntrega.EM_ROTA)
-                .order_by(Entrega.atualizado_em.desc())  # ou o campo que registra a data/hora
+                .filter(
+                    Entrega.motorista_id == dados['motorista_id'],
+                    or_(
+                        Entrega.status == StatusEntrega.EM_ROTA,
+                        Entrega.status == StatusEntrega.NAO_ENTREGUE,
+                        Entrega.status == StatusEntrega.ENTREGUE
+                    )
+                )
+                .order_by(Entrega.atualizado_em.desc())  
                 .first()
             )
             
