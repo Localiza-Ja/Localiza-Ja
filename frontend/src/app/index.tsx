@@ -30,7 +30,6 @@ import { UserType } from "../types";
 import { loginMotorista } from "../services/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-
 const DEV_CNH = "11111111111";
 const DEV_PLACA = "JSP-0101";
 
@@ -161,20 +160,15 @@ export default function Login() {
         Alert.alert("Erro de Login", errorMessage);
       }
     } else if (userType === "cliente") {
-      // Se quiser mostrar o Alert antes de navegar:
-      Alert.alert(
-        "Em breve",
-        "A funcionalidade de rastreio para clientes ainda está em desenvolvimento.",
-        [
-          {
-            text: "OK",
-            onPress: () => router.push("/client"), // Navegue para a tela desejada aqui
-          },
-        ]
-      );
+      if (!pedido || pedido.trim() === "") {
+        Alert.alert("Atenção", "Por favor, insira o número do pedido.");
+        return;
+      }
 
-      // Se não quiser mostrar o Alert, basta navegar direto:
-      // router.push("/cliente");
+      router.push({
+        pathname: "/client",
+        params: { pedido: pedido.trim() },
+      });
     }
   };
 
@@ -227,7 +221,6 @@ export default function Login() {
                     placeholder="XXXXXXXXXXXX"
                     value={pedido}
                     onChangeText={setPedido}
-                    keyboardType="numeric"
                   />
                   <Text
                     style={styles.helperText}
