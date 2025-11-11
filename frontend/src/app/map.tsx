@@ -16,6 +16,7 @@ import React, { useRef, useState, useEffect, memo } from "react";
 import * as Location from "expo-location";
 import { Delivery } from "../types";
 import AppHeader from "../components/AppHeader";
+import { ToastProvider, useToast } from "../components/Toast";
 import DeliveryPanel from "../components/DeliveryPanel";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
@@ -143,7 +144,7 @@ const getSmartZoomLevel = (speed: number): number => {
   else return 17;
 };
 
-export default function MapScreen() {
+function MapScreenInner() {
   // Refs/estados principais do mapa e dados.
   const mapRef = useRef<MapView>(null);
   const [motorista, setMotorista] = useState<any>(null);
@@ -162,6 +163,8 @@ export default function MapScreen() {
   const [isNavigating, setIsNavigating] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isMapCentered, setIsMapCentered] = useState(true);
+
+  const { showToast } = useToast();
 
   // Carrega sessão e entregas + geocode inicial.
   useEffect(() => {
@@ -346,6 +349,37 @@ export default function MapScreen() {
     s === "cancelada" ||
     s === "nao_entregue";
 
+  // 🔹 Helper de toast POR STATUS (fora da função pra não dar erro de hoisting)
+  const getToastForStatus = (status: EntregaStatus) => {
+    switch (status) {
+      case "em_rota":
+        return {
+          type: "info" as const,
+          title: "Entrega iniciada",
+        };
+      case "entregue":
+        return {
+          type: "success" as const,
+          title: "Entrega concluída",
+        };
+      case "cancelada":
+        return {
+          type: "warning" as const,
+          title: "Entrega cancelada",
+        };
+      case "nao_entregue":
+        return {
+          type: "warning" as const,
+          title: "Entrega não realizada",
+        };
+      default:
+        return {
+          type: "info" as const,
+          title: "Status atualizado",
+        };
+    }
+  };
+
   // Atualiza status no backend e sincroniza o state local.
   async function handleUpdateStatus(
     deliveryId: string,
@@ -414,6 +448,10 @@ export default function MapScreen() {
 
       setDeliveriesData(updatedDeliveries);
 
+      // 👉 agora a função já existe antes, não dá erro
+      const toastConfig = getToastForStatus(newStatus);
+      showToast(toastConfig);
+
       // Pós-ação quando finaliza/cancela a entrega selecionada.
       if (selectedDelivery?.id === deliveryId) {
         if (["entregue", "cancelada", "nao_entregue"].includes(newStatus)) {
@@ -430,10 +468,13 @@ export default function MapScreen() {
         "Erro ao atualizar status:",
         error.response?.data || error.message
       );
-      Alert.alert(
-        "Erro",
-        "Não foi possível atualizar o status. (Obs.: 'entregue' e 'nao_entregue' exigem foto_prova no backend.)"
-      );
+
+      showToast({
+        type: "error",
+        title: "Erro ao atualizar",
+        message:
+          "Não foi possível atualizar o status. Tente novamente em instantes.",
+      });
     }
   }
 
@@ -626,3 +667,12 @@ const styles = StyleSheet.create({
     borderColor: "rgba(0,0,0,0.1)",
   },
 });
+
+// 🔚 Wrapper exportando com ToastProvider
+export default function MapScreen() {
+  return (
+    <ToastProvider>
+      <MapScreenInner />
+    </ToastProvider>
+  );
+}
