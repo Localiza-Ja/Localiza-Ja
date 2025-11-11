@@ -8,6 +8,7 @@ NOTE: Este módulo inclui endpoints para autenticação (login/logout) e gerenci
 TODO: Adicionar suporte a paginação em listas longas para melhor performance.
 """
 
+from sqlalchemy import or_
 from app.db import db
 from app.models.usuarios import Usuario
 from app.models.entrega import Entrega, StatusEntrega
@@ -764,7 +765,6 @@ class EntregaStatusResource(Resource):
             foto_prova = dados.get('foto_prova')
             if foto_prova:
                 foto_prova = processar_foto_prova(foto_prova, entrega_id)
-            localizacao = None
             if novo_status == StatusEntrega.PENDENTE:
                 pass
             elif novo_status == StatusEntrega.EM_ROTA:
@@ -796,8 +796,6 @@ class EntregaStatusResource(Resource):
                 "status": True,
                 "Entrega": entrega.json()
             }
-            if localizacao:
-                response["Localizacao"] = localizacao.json()
             return response, 200
         except ValueError as e:
             db.session.rollback()
@@ -1042,7 +1040,7 @@ class LocalizacaoIoTResource(Resource):
                         Entrega.status == StatusEntrega.ENTREGUE
                     )
                 )
-                .order_by(Entrega.atualizado_em.desc())  
+                .order_by(Entrega.atualizado_em.desc())
                 .first()
             )
             
@@ -1116,7 +1114,6 @@ class LocalizacaoEntregaResource(Resource):
             return {"message": f"Erro interno no servidor: {str(e)}", "status": False}, 500
 
 class LocalizacaoMotoristaResource(Resource):
-    @jwt_required()
     def get(self, motorista_id):
         """
         Lista localizações por motorista.
