@@ -13,7 +13,7 @@ import {
   Alert,
   LayoutAnimationConfig,
 } from "react-native";
-import { BottomSheetView, BottomSheetFlatList } from "@gorhom/bottom-sheet";
+import { BottomSheetFlatList } from "@gorhom/bottom-sheet";
 import { Delivery } from "../types";
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import Svg, { Line } from "react-native-svg";
@@ -65,7 +65,7 @@ type DeliveriesListProps = {
   isLoading: boolean;
   onStartNavigation: () => void;
   onLogout: () => void;
-  simultaneousHandlers?: any;
+  waitFor?: any;
 };
 
 type DeliveryListItemProps = {
@@ -208,7 +208,7 @@ const DeliveryListItem: React.FC<DeliveryListItemProps> = React.memo(
 
     return (
       <View className={`px-4 ${itemOpacity}`} style={{ position: "relative" }}>
-        {/* SKELETON por cima do conteúdo, com o MESMO layout do item */}
+        {/* Skeleton por cima do conteúdo */}
         {showSkeleton && (
           <RNAnimated.View
             style={[
@@ -234,7 +234,7 @@ const DeliveryListItem: React.FC<DeliveryListItemProps> = React.memo(
           </RNAnimated.View>
         )}
 
-        {/* CONTEÚDO REAL */}
+        {/* Conteúdo real */}
         <RNAnimated.View style={{ opacity: contentOpacity }}>
           <View style={styles.itemRow}>
             <View style={styles.leftColumn}>
@@ -386,7 +386,7 @@ const DeliveryListItem: React.FC<DeliveryListItemProps> = React.memo(
   }
 );
 
-// Lista principal de entregas (com bottom sheet e modal).
+// Lista principal de entregas.
 export default function DeliveriesList({
   data,
   focusedDelivery,
@@ -395,14 +395,13 @@ export default function DeliveriesList({
   onStartNavigation,
   onLogout,
   isLoading,
-  simultaneousHandlers,
+  waitFor,
 }: DeliveriesListProps) {
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [deliveryToConfirm, setDeliveryToConfirm] = useState<Delivery | null>(
     null
   );
 
-  // Impede iniciar uma nova quando já existe "em_rota".
   const handleStart = (event: GestureResponderEvent, item: Delivery) => {
     const jaTemEmRota = data.some((d) => d.status === "em_rota");
     if (jaTemEmRota) {
@@ -429,16 +428,13 @@ export default function DeliveriesList({
     );
   };
 
-  // Abre modal para finalizar (entregue/não entregue).
   const handleFinish = (event: GestureResponderEvent, item: Delivery) => {
     setDeliveryToConfirm(item);
     setIsModalVisible(true);
   };
 
-  // Helper: pergunta foto quando necessário (mantém legado).
   const askForPhotoBase64 = () => pickProofPhotoBase64();
 
-  // Recebe dados do modal e dispara atualização.
   const handleConfirmDelivery = async (details: {
     status: "entregue" | "nao_entregue";
     nome_recebido: string;
@@ -480,7 +476,6 @@ export default function DeliveriesList({
     setDeliveryToConfirm(null);
   };
 
-  // Confirma o cancelamento da entrega.
   const handleCancel = (event: GestureResponderEvent, item: Delivery) => {
     Alert.alert(
       "Cancelar Entrega",
@@ -500,18 +495,13 @@ export default function DeliveriesList({
     );
   };
 
-  // Dispara animação e informa item focado ao pai.
   const handleItemPress = (item: Delivery) => {
     LayoutAnimation.configureNext(CustomLayoutLinear);
     onDeliveryPress(item);
   };
 
   return (
-    <BottomSheetView style={styles.listContainer}>
-      <View style={styles.listHeader} pointerEvents="none" collapsable={false}>
-        <Text style={styles.headerText}>Entregas do Dia</Text>
-      </View>
-
+    <>
       <BottomSheetFlatList<Delivery>
         data={data}
         keyExtractor={(item: Delivery) => item.id}
@@ -532,7 +522,7 @@ export default function DeliveriesList({
         contentContainerStyle={styles.listContentContainer}
         removeClippedSubviews={false}
         extraData={focusedDelivery}
-        simultaneousHandlers={simultaneousHandlers}
+        waitFor={waitFor}
         overScrollMode="always"
         keyboardShouldPersistTaps="handled"
       />
@@ -542,18 +532,11 @@ export default function DeliveriesList({
         onClose={() => setIsModalVisible(false)}
         onConfirm={handleConfirmDelivery}
       />
-    </BottomSheetView>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  listContainer: {
-    flex: 1,
-    backgroundColor: "#1F2937",
-    borderTopLeftRadius: 35,
-    borderTopRightRadius: 35,
-    overflow: "hidden",
-  },
   itemRow: { flexDirection: "row" },
   leftColumn: {
     width: 48,
@@ -576,21 +559,19 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     paddingBottom: 24,
   },
-  listHeader: { paddingVertical: 16, paddingHorizontal: 24 },
-  headerText: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#F9FAFB",
-    textAlign: "center",
-    width: "100%",
-  },
+
+  // Agora o card branco com borda "pra dentro" é o próprio scroll
   flatListStyle: {
     flex: 1,
     backgroundColor: "#FFFFFF",
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
+    paddingTop: 8,
   },
-  listContentContainer: { paddingBottom: 50, backgroundColor: "transparent" },
+  listContentContainer: {
+    paddingBottom: 50,
+    backgroundColor: "transparent",
+  },
 
   // Skeleton
   skeletonCircle: {
