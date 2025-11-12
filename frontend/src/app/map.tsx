@@ -1,40 +1,43 @@
-//frontend/src/app/map.tsx
+// frontend/src/app/map.tsx
 
-import { router } from "expo-router";
+/**
+ * Tela principal do motorista com o mapa.
+ * - Orquestra sessão, entregas, localização em tempo real e rotas.
+ * - Renderiza o MapView com motorista, pinos de entrega, rota e trilha percorrida.
+ * - Integra o painel inferior de entregas (DeliveryPanel) e o cabeçalho (AppHeader).
+ *
+ * A lógica pesada foi extraída para hooks em `src/hooks` e util em `src/utils/geocoding`,
+ * mantendo este arquivo como "compositor" da tela, sem alterar o comportamento original.
+ */
+
 import {
   View,
   StyleSheet,
   Image,
   Alert,
-  ActivityIndicator,
   TouchableOpacity,
   Platform,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import MapView, { Marker, Polyline, Circle } from "react-native-maps";
 import React, { useRef, useState, useEffect, memo } from "react";
-import * as Location from "expo-location";
 import { Delivery } from "../types";
 import AppHeader from "../components/AppHeader";
 import { ToastProvider, useToast } from "../components/Toast";
 import DeliveryPanel from "../components/DeliveryPanel";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
-  getSession,
-  logoutMotorista,
-  getEntregasPorMotorista,
   updateStatusEntrega,
   EntregaStatus,
   AtualizarStatusDetails,
 } from "../services/api";
 import { Feather } from "@expo/vector-icons";
+import { useInitialMapData } from "../hooks/useInitialMapData";
+import { useDriverLocation } from "../hooks/useDriverLocation";
+import { useRouteToDelivery } from "../hooks/useRouteToDelivery";
 
 // Imagens do app (logo e seta do motorista).
 const appLogo = require("../../assets/images/lj-logo.png");
 const navigationArrow = require("../../assets/images/navigation-arrow.png");
-
-// Tipos utilitários.
-type LocationCoords = Location.LocationObject["coords"];
 
 // Estilos de rota desenhada no mapa.
 const ROUTE_COLOR = "#4285F4";
@@ -42,79 +45,13 @@ const ROUTE_OUTLINE_COLOR = "#FFFFFF";
 const ROUTE_WIDTH = 6;
 const ROUTE_OUTLINE_WIDTH = ROUTE_WIDTH + 4;
 
-const MIN_INITIAL_LOADING_MS = 1050;
-
-// Chave da OpenRouteService para geocode e rotas.
-const ORS_API_KEY =
-  "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImUwZGJlZDIyODYzZjQ2MmNhYWFlY2EyNGQ1MWFjMDI0IiwiaCI6Im11cm11cjY0In0=";
-
-// Coordenadas mockadas para alguns endereços.
-const mockedCoordinates: {
-  [key: string]: { latitude: number; longitude: number };
-} = {
-  "Rua Dr. Salles de Oliveira, 1380, Vila Industrial, Campinas, SP": {
-    latitude: -22.91506,
-    longitude: -47.08155,
-  },
-  "Avenida da Amizade, 2300, Vila Carlota, Sumaré, SP": {
-    latitude: -22.81308,
-    longitude: -47.25197,
-  },
-  "Rua Luiz Camilo de Camargo, 585, Centro, Hortolândia, SP": {
-    latitude: -22.8596,
-    longitude: -47.22013,
-  },
-  "Av. Iguatemi, 777, Vila Brandina, Campinas, SP": {
-    latitude: -22.89531,
-    longitude: -47.02115,
-  },
-  "Rua Antônio de Castro, 123, Sousas, Campinas, SP": {
-    latitude: -22.88045,
-    longitude: -46.96695,
-  },
-  "Avenida Olivo Callegari, 789, Centro, Sumaré, SP": {
-    latitude: -22.82223,
-    longitude: -47.27137,
-  },
-  "Rua Sete de Setembro, 50, Centro, Valinhos, SP": {
-    latitude: -22.97126,
-    longitude: -46.99616,
-  },
-  "Avenida Francisco Glicério, 1000, Centro, Campinas, SP": {
-    latitude: -22.90565,
-    longitude: -47.05837,
-  },
-  "Rua Rosina Zagatti, 204, Jardim Amanda II, Hortolândia, SP": {
-    latitude: -22.89426,
-    longitude: -47.2346,
-  },
-  "Avenida John Boyd Dunlop, 3900, Jardim Ipaussurama, Campinas, SP": {
-    latitude: -22.9234,
-    longitude: -47.11211,
-  },
-};
-
-// Geocoding: usa mock ou consulta ORS.
-const geocodeAddress = async (address: string) => {
-  if (mockedCoordinates[address]) {
-    return mockedCoordinates[address];
-  }
-  try {
-    const response = await fetch(
-      `https://api.openrouteservice.org/geocode/search?api_key=${ORS_API_KEY}&text=${encodeURIComponent(
-        address
-      )}`
-    );
-    const json = await response.json();
-    if (json.features && json.features.length > 0) {
-      const [longitude, latitude] = json.features[0].geometry.coordinates;
-      return { latitude, longitude };
-    }
-    return null;
-  } catch (error) {
-    console.error("Erro no Geocoding:", error);
-    return null;
-  }
+// Define zoom/câmera baseado na velocidade.
+const getSmartZoomLevel = (speed: number): number => {
+  const speedKmh = speed * 3.6;
+  if (speedKmh > 80) return 17;
+  else if (speedKmh > 40) return 17;
+  else if (speedKmh > 10) return 18;
+  else return 17;
 };
 
 // Pino personalizado de entrega.
@@ -135,165 +72,35 @@ const DriverIndicator: React.FC = memo(
   () => true
 );
 
-// Define zoom/câmera baseado na velocidade.
-const getSmartZoomLevel = (speed: number): number => {
-  const speedKmh = speed * 3.6;
-  if (speedKmh > 80) return 17;
-  else if (speedKmh > 40) return 17;
-  else if (speedKmh > 10) return 18;
-  else return 17;
-};
-
 function MapScreenInner() {
-  // Refs/estados principais do mapa e dados.
   const mapRef = useRef<MapView>(null);
-  const [motorista, setMotorista] = useState<any>(null);
+
+  // Estado da UI da tela
   const [selectedDelivery, setSelectedDelivery] = useState<Delivery | null>(
     null
   );
-  const [deliveriesData, setDeliveriesData] = useState<Delivery[]>([]);
-  const [driverLocation, setDriverLocation] =
-    useState<Location.LocationObject | null>(null);
-  const [routeCoordinates, setRouteCoordinates] = useState<
-    { latitude: number; longitude: number }[]
-  >([]);
-  const [pastCoordinates, setPastCoordinates] = useState<
-    { latitude: number; longitude: number }[]
-  >([]);
   const [isNavigating, setIsNavigating] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
   const [isMapCentered, setIsMapCentered] = useState(true);
 
+  // Dados iniciais: sessão do motorista + entregas + loading.
+  const {
+    motorista,
+    deliveriesData,
+    setDeliveriesData,
+    isLoading,
+    handleLogout,
+  } = useInitialMapData();
+
+  // Localização em tempo real e trilha percorrida.
+  const { driverLocation, pastCoordinates } = useDriverLocation();
+
+  // Rota entre motorista e entrega selecionada.
+  const { routeCoordinates, clearRoute } = useRouteToDelivery(
+    driverLocation,
+    selectedDelivery
+  );
+
   const { showToast } = useToast();
-
-  // Carrega sessão e entregas + geocode inicial.
-  useEffect(() => {
-    const carregarDadosIniciais = async () => {
-      const startTime = Date.now();
-      try {
-        const sessionResponse = await getSession();
-        const motoristaLogado = sessionResponse.data.Usuario;
-        setMotorista(motoristaLogado);
-
-        const todasEntregasResponse = await getEntregasPorMotorista(
-          motoristaLogado.id
-        );
-        const todasEntregas = todasEntregasResponse.data.Entregas || [];
-        const entregasComCoordenadas = await Promise.all(
-          todasEntregas.map(async (entrega: Delivery) => {
-            const coords = await geocodeAddress(entrega.endereco_entrega);
-            return {
-              ...entrega,
-              latitude: coords?.latitude ?? null,
-              longitude: coords?.longitude ?? null,
-            };
-          })
-        );
-        setDeliveriesData(entregasComCoordenadas);
-        setSelectedDelivery(null);
-      } catch (error: any) {
-        console.error(
-          "Erro ao carregar dados:",
-          error.response?.data || error.message
-        );
-        Alert.alert("Sessão Expirada", "Faça login novamente.");
-        await handleLogout(true);
-      } finally {
-        const elapsed = Date.now() - startTime;
-        const remaining = Math.max(0, MIN_INITIAL_LOADING_MS - elapsed);
-        setTimeout(() => setIsLoading(false), remaining);
-      }
-    };
-    carregarDadosIniciais();
-  }, []);
-
-  // Solicita permissões e observa posição do motorista.
-  useEffect(() => {
-    let subscription: Location.LocationSubscription | null = null;
-    const requestPermissionsAndStartWatching = async () => {
-      let { status: foregroundStatus } =
-        await Location.requestForegroundPermissionsAsync();
-      if (foregroundStatus !== "granted") {
-        Alert.alert(
-          "Permissão Negada",
-          "A permissão de localização é necessária."
-        );
-        return;
-      }
-      let { status: backgroundStatus } =
-        await Location.requestBackgroundPermissionsAsync();
-      if (backgroundStatus !== "granted") {
-        console.warn("Permissão de localização em segundo plano negada.");
-      }
-      subscription = await Location.watchPositionAsync(
-        {
-          accuracy: Location.Accuracy.BestForNavigation,
-          timeInterval: 1000,
-          distanceInterval: 10,
-        },
-        (location) => {
-          setDriverLocation(location);
-          setPastCoordinates((prev) => [...prev, location.coords]);
-        }
-      );
-    };
-    requestPermissionsAndStartWatching();
-    return () => {
-      if (subscription) {
-        subscription.remove();
-      }
-    };
-  }, []);
-
-  // Busca rota ORS entre motorista e entrega selecionada.
-  useEffect(() => {
-    if (!driverLocation || !selectedDelivery || !selectedDelivery.latitude) {
-      setRouteCoordinates([]);
-      return;
-    }
-    const fetchRoute = async () => {
-      try {
-        const startCoords = `${driverLocation.coords.longitude},${driverLocation.coords.latitude}`;
-        const endCoords = `${selectedDelivery.longitude},${selectedDelivery.latitude}`;
-        const response = await fetch(
-          `https://api.openrouteservice.org/v2/directions/driving-car?api_key=${ORS_API_KEY}&start=${startCoords}&end=${endCoords}`
-        );
-        const json = await response.json();
-        if (json.features && json.features.length > 0) {
-          const points = json.features[0].geometry.coordinates.map(
-            (p: number[]) => ({ latitude: p[1], longitude: p[0] })
-          );
-          setRouteCoordinates(points);
-        } else {
-          console.error("ERRO NA API DE ROTAS:", json);
-        }
-      } catch (error) {
-        console.error("ERRO AO BUSCAR ROTA DO ORS:", error);
-      }
-    };
-    fetchRoute();
-  }, [driverLocation, selectedDelivery]);
-
-  // Atualiza câmera conforme modo de navegação/posicionamento.
-  useEffect(() => {
-    if (driverLocation && mapRef.current && isMapCentered) {
-      const currentZoom = getSmartZoomLevel(driverLocation.coords.speed || 0);
-      const cameraSettings = isNavigating
-        ? {
-            center: driverLocation.coords,
-            heading: driverLocation.coords.heading || 0,
-            pitch: 45,
-            zoom: currentZoom,
-          }
-        : {
-            center: driverLocation.coords,
-            heading: 0,
-            pitch: 0,
-            zoom: 16,
-          };
-      mapRef.current.animateCamera(cameraSettings, { duration: 400 });
-    }
-  }, [isNavigating, driverLocation, isMapCentered]);
 
   // Região inicial do mapa (Campinas).
   const initialRegion = {
@@ -303,18 +110,19 @@ function MapScreenInner() {
     longitudeDelta: 0.1,
   };
 
-  // Faz logout e limpa token.
-  const handleLogout = async (forceLogout = false) => {
-    if (!forceLogout) {
-      try {
-        await logoutMotorista();
-      } catch (error) {
-        console.error("Erro no logout:", error);
-      }
+  // Atualiza câmera conforme modo de navegação/posicionamento.
+  useEffect(() => {
+    if (driverLocation && mapRef.current && isMapCentered) {
+      const currentZoom = getSmartZoomLevel(driverLocation.coords.speed || 0);
+      const cameraSettings = {
+        center: driverLocation.coords,
+        heading: driverLocation.coords.heading || 0,
+        pitch: 0, // 2D sempre
+        zoom: isNavigating ? currentZoom : 16,
+      };
+      mapRef.current.animateCamera(cameraSettings, { duration: 400 });
     }
-    await AsyncStorage.removeItem("@user_token");
-    router.replace("/");
-  };
+  }, [isNavigating, driverLocation, isMapCentered]);
 
   // Seleção/deseleção de entrega com ajuste de câmera.
   function handleDeliveryPress(delivery: Delivery) {
@@ -322,7 +130,7 @@ function MapScreenInner() {
 
     if (selectedDelivery?.id === delivery.id) {
       setSelectedDelivery(null);
-      setRouteCoordinates([]);
+      clearRoute();
       setIsMapCentered(false);
     } else {
       setSelectedDelivery(delivery);
@@ -349,7 +157,7 @@ function MapScreenInner() {
     s === "cancelada" ||
     s === "nao_entregue";
 
-  // 🔹 Helper de toast POR STATUS (fora da função pra não dar erro de hoisting)
+  // Helper de toast POR STATUS.
   const getToastForStatus = (status: EntregaStatus) => {
     switch (status) {
       case "em_rota":
@@ -448,14 +256,13 @@ function MapScreenInner() {
 
       setDeliveriesData(updatedDeliveries);
 
-      // 👉 agora a função já existe antes, não dá erro
       const toastConfig = getToastForStatus(newStatus);
       showToast(toastConfig);
 
       // Pós-ação quando finaliza/cancela a entrega selecionada.
       if (selectedDelivery?.id === deliveryId) {
         if (["entregue", "cancelada", "nao_entregue"].includes(newStatus)) {
-          setRouteCoordinates([]);
+          clearRoute();
           const proximaEntrega = updatedDeliveries.find(
             (d) => d.status === "pendente"
           );
@@ -508,12 +315,11 @@ function MapScreenInner() {
           if (isMapCentered) {
             if (details && details.isGesture) {
               setIsMapCentered(false);
-              console.log(
-                "RASTREAMENTO DESLIGADO POR INTERAÇÃO MANUAL (pan/zoom/tilt)"
-              );
             }
           }
         }}
+        pitchEnabled={false}
+        rotateEnabled={false}
       >
         {deliveriesData
           .filter((d) => {
@@ -668,7 +474,7 @@ const styles = StyleSheet.create({
   },
 });
 
-// 🔚 Wrapper exportando com ToastProvider
+// Wrapper exportando com ToastProvider
 export default function MapScreen() {
   return (
     <ToastProvider>
