@@ -150,13 +150,6 @@ function MapScreenInner() {
     }
   }
 
-  // Verifica se um status exige coordenadas.
-  const statusExigeCoordenadas = (s: EntregaStatus) =>
-    s === "em_rota" ||
-    s === "entregue" ||
-    s === "cancelada" ||
-    s === "nao_entregue";
-
   // Helper de toast POR STATUS.
   const getToastForStatus = (status: EntregaStatus) => {
     switch (status) {
@@ -209,20 +202,7 @@ function MapScreenInner() {
         }
       }
 
-      // Injeta lat/long quando exigido.
-      let detailsToSend: AtualizarStatusDetails = { ...(details as any) };
-      if (statusExigeCoordenadas(newStatus)) {
-        if (!driverLocation) {
-          Alert.alert(
-            "Localização indisponível",
-            "Não foi possível obter sua localização atual."
-          );
-          return;
-        }
-        const { latitude, longitude } = driverLocation.coords;
-        (detailsToSend as any).latitude = latitude;
-        (detailsToSend as any).longitude = longitude;
-      }
+      const detailsToSend: AtualizarStatusDetails = { ...(details as any) };
 
       // Chama API de atualização.
       await updateStatusEntrega(deliveryId, newStatus, detailsToSend);
@@ -232,12 +212,6 @@ function MapScreenInner() {
         if (d.id !== deliveryId) return d;
 
         const patch: Partial<Delivery> = {};
-        if ("latitude" in (detailsToSend as any)) {
-          patch.latitude = (detailsToSend as any).latitude;
-        }
-        if ("longitude" in (detailsToSend as any)) {
-          patch.longitude = (detailsToSend as any).longitude;
-        }
         if (
           newStatus === "entregue" &&
           "nome_recebido" in (detailsToSend as any)
