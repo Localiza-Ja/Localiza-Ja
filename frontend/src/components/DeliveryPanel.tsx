@@ -19,6 +19,7 @@ type DeliveryPanelProps = {
   ) => void;
   onLogout: () => void;
   onStartNavigation: () => void;
+  onSheetIndexChange?: (index: number) => void;
   isLoadingList: boolean;
 };
 
