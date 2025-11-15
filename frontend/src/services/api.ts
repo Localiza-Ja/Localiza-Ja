@@ -1,7 +1,22 @@
-//frontend/src/services/api.ts
+// frontend/src/services/api.ts
 
 import axios, { AxiosHeaders } from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+
+import type {
+  EntregaStatus,
+  Entrega as EntregaModel,
+  Usuario as UsuarioModel,
+  LoginResponse,
+  SessionResponse,
+  ListaEntregasResponse,
+  AtualizarStatusEntregaResponse,
+} from "../types";
+
+// reexport pra manter compatibilidade com imports antigos
+export type Delivery = EntregaModel;
+export type Usuario = UsuarioModel;
+export type { EntregaStatus } from "../types";
 
 // Configura baseURL e timeout do backend Flask.
 export const api = axios.create({
@@ -23,35 +38,6 @@ api.interceptors.request.use(async (config) => {
   }
   return config;
 });
-
-export type EntregaStatus =
-  | "pendente"
-  | "em_rota"
-  | "entregue"
-  | "cancelada"
-  | "nao_entregue";
-
-export type Delivery = {
-  id: string;
-  motorista_id: string;
-  endereco_entrega: string;
-  numero_pedido: string;
-  status: EntregaStatus;
-  nome_cliente?: string;
-  observacao?: string;
-  motivo?: string | null;
-  nome_recebido?: string | null;
-  latitude?: number | null;
-  longitude?: number | null;
-};
-
-export type Usuario = {
-  id: string;
-  nome: string;
-  placa_veiculo: string;
-  cnh: string;
-  telefone?: string;
-};
 
 // Detalhes enviados por status (lat/long são injetados no map.tsx).
 export type AtualizarStatusDetails =
@@ -77,25 +63,35 @@ export type AtualizarStatusDetails =
       longitude?: number;
     };
 
-// Endpoints de autenticação e dados.
-export async function loginMotorista(cnh: string, placa: string) {
-  return api.post("/usuarios/login", { cnh, placa_veiculo: placa });
+// --------- ENDPOINTS DE AUTENTICAÇÃO E SESSÃO ----------
+
+// ⚠️ Importante: continua retornando o AxiosResponse,
+// só que agora tipado com LoginResponse.
+// Então o resto do app pode continuar usando `response.data`.
+export function loginMotorista(cnh: string, placa: string) {
+  return api.post<LoginResponse>("/usuarios/login", {
+    cnh,
+    placa_veiculo: placa,
+  });
 }
 
-export async function getSession() {
-  return api.get("/usuarios/session");
+export function getSession() {
+  return api.get<SessionResponse>("/usuarios/session");
 }
 
-export async function logoutMotorista() {
+export function logoutMotorista() {
+  // seu backend provavelmente retorna { message, status }
   return api.post("/usuarios/logout");
 }
 
-export async function getEntregasPorMotorista(motoristaId: string) {
-  return api.get(`/entregas/motorista/${motoristaId}`);
+// --------- ENTREGAS ----------
+
+export function getEntregasPorMotorista(motoristaId: string) {
+  return api.get<ListaEntregasResponse>(`/entregas/motorista/${motoristaId}`);
 }
 
 // Atualiza status de entrega (monta payload conforme o status).
-export async function updateStatusEntrega(
+export function updateStatusEntrega(
   entregaId: string,
   status: EntregaStatus,
   details: AtualizarStatusDetails
@@ -116,5 +112,8 @@ export async function updateStatusEntrega(
     base.foto_prova = (details as any).foto_prova;
   }
 
-  return api.put(`/entregas/${entregaId}/status`, base);
+  return api.put<AtualizarStatusEntregaResponse>(
+    `/entregas/${entregaId}/status`,
+    base
+  );
 }

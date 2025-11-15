@@ -6,6 +6,14 @@
  *
  * A lógica pesada foi extraída para hooks em `src/hooks` e util em `src/utils/geocoding`,
  * mantendo este arquivo como "compositor" da tela, sem alterar o comportamento original.
+ *
+ * BLOCO DE SIMULAÇÃO:
+ * - Toda a lógica de simulação foi isolada em:
+ *   - `useSimulationController` (estado da simulação)
+ *   - `useSimulatedNavigation` (motor de movimento)
+ *   - `SimulationFab` (UI para ligar/desligar simulação)
+ * - Se no futuro você quiser usar apenas GPS/IoT real, basta NÃO chamar
+ *   os métodos de simulação e/ou ignorar `simulatedLocation` aqui.
  */
 
 import {
@@ -33,10 +41,16 @@ import { Feather } from "@expo/vector-icons";
 import { useInitialMapData } from "../hooks/useInitialMapData";
 import { useDriverLocation } from "../hooks/useDriverLocation";
 import { useRouteToDelivery } from "../hooks/useRouteToDelivery";
-import { useSimulatedNavigation } from "../hooks/useSimulatedNavigation";
+import {
+  useSimulatedNavigation,
+  SimulatedLocation,
+} from "../hooks/useSimulatedNavigation";
+import { useSimulationController } from "../hooks/useSimulationController";
+import SimulationFab from "../components/SimulationFab";
 
 import mapStyleLight from "../styles/mapStyleLight";
 import mapStyleDark from "../styles/mapStyleDark";
+import { ORS_API_KEY } from "../utils/geocoding";
 
 // Imagens do app (logo e seta do motorista).
 const appLogo = require("../../assets/images/lj-logo.png");
@@ -94,6 +108,10 @@ function MapScreenInner() {
   );
   const [isNavigating, setIsNavigating] = useState(false);
   const [isMapCentered, setIsMapCentered] = useState(true);
+  const [sheetIndex, setSheetIndex] = useState(1); // índice do BottomSheet (10%, 60%, 95%)
+
+  // --- BLOCO: estado de alto nível da SIMULAÇÃO (independente do mapa) ---
+  const simulation = useSimulationController();
 
   // Dados iniciais: sessão do motorista + entregas + loading.
   const {
@@ -113,12 +131,104 @@ function MapScreenInner() {
     selectedDelivery
   );
 
-  // Localização efetiva: simulação (quando há rota e está navegando) ou GPS real.
-  const simulated = useSimulatedNavigation({
-    enabled: isNavigating && routeCoordinates.length > 1,
-    path: routeCoordinates as LatLng[],
+  // Rota alternativa para o modo "errar" (usa ORS com preference=shortest).
+  const [wrongRouteCoordinates, setWrongRouteCoordinates] = useState<LatLng[]>(
+    []
+  );
+
+  useEffect(() => {
+    // Se não está no modo "errar", limpa a rota alternativa
+    if (!simulation.isWrongRoute) {
+      setWrongRouteCoordinates([]);
+      return;
+    }
+
+    if (!driverLocation || !selectedDelivery || !selectedDelivery.latitude) {
+      setWrongRouteCoordinates([]);
+      return;
+    }
+
+    const fetchWrongRoute = async () => {
+      try {
+        const startCoords = `${driverLocation.coords.longitude},${driverLocation.coords.latitude}`;
+        const endCoords = `${selectedDelivery.longitude},${selectedDelivery.latitude}`;
+
+        const response = await fetch(
+          `https://api.openrouteservice.org/v2/directions/driving-car?api_key=${ORS_API_KEY}&start=${startCoords}&end=${endCoords}&preference=shortest`
+        );
+        const json = await response.json();
+
+        if (json.features && json.features.length > 0) {
+          const points = json.features[0].geometry.coordinates.map(
+            (p: number[]) => ({
+              latitude: p[1],
+              longitude: p[0],
+            })
+          );
+          setWrongRouteCoordinates(points);
+        } else {
+          console.warn("ERRO NA API DE ROTAS ALTERNATIVAS:", json);
+          setWrongRouteCoordinates([]);
+        }
+      } catch (error) {
+        console.error("ERRO AO BUSCAR ROTA ALTERNATIVA DO ORS:", error);
+        setWrongRouteCoordinates([]);
+      }
+    };
+
+    fetchWrongRoute();
+  }, [simulation.isWrongRoute, driverLocation, selectedDelivery]);
+
+  // Rota "ativa" que será desenhada e usada pela simulação
+  const activeRouteCoordinates =
+    simulation.isWrongRoute && wrongRouteCoordinates.length > 1
+      ? wrongRouteCoordinates
+      : routeCoordinates;
+
+  // --- BLOCO: motor de simulação (usa apenas rota + flags de simulação) ---
+  const simulationPath = useMemo(() => {
+    if (!simulation.isEnabled || activeRouteCoordinates.length < 2) return [];
+    return activeRouteCoordinates as LatLng[];
+  }, [simulation.isEnabled, activeRouteCoordinates]);
+
+  const simulatedLocation = useSimulatedNavigation({
+    enabled: simulation.isEnabled && simulationPath.length > 1, // 👈 NÃO desliga quando pausa
+    paused: simulation.isPaused, // 👈 pausa só o avanço interno, sem resetar progresso
+    path: simulationPath,
   });
-  const effectiveLocation = simulated ?? driverLocation;
+
+  // Guarda a última posição simulada para usar quando PAUSAR
+  const [frozenSimLocation, setFrozenSimLocation] =
+    useState<SimulatedLocation | null>(null);
+
+  useEffect(() => {
+    if (simulatedLocation) {
+      setFrozenSimLocation(simulatedLocation);
+    }
+  }, [simulatedLocation]);
+
+  // Quando simulação é encerrada, limpamos a posição congelada
+  useEffect(() => {
+    if (!simulation.isEnabled) {
+      setFrozenSimLocation(null);
+    }
+  }, [simulation.isEnabled]);
+
+  // Localização base:
+  // - Se simulação estiver ligada:
+  //    - usa posição em movimento OU congelada do simulador
+  //    - fallback para driverLocation se não tiver nenhuma
+  // - Se simulação estiver desligada:
+  //    - usa sempre driverLocation (GPS/IoT)
+  const baseLocation = simulation.isEnabled
+    ? simulatedLocation ?? frozenSimLocation ?? driverLocation
+    : driverLocation;
+
+  // Localização efetiva (após aplicar qualquer "erro de rota").
+  // Agora NÃO aplicamos mais offset perpendicular, justamente
+  // para não deixar o carro "no meio do quarteirão".
+  // O "erro" é representado pela rota alternativa (activeRouteCoordinates).
+  const effectiveLocation = baseLocation ?? driverLocation ?? null;
 
   const { showToast } = useToast();
 
@@ -148,6 +258,8 @@ function MapScreenInner() {
 
   // Seleção/deseleção de entrega com ajuste de câmera.
   function handleDeliveryPress(delivery: Delivery) {
+    // Navegação (seguir carro) e simulação são independentes,
+    // mas ao trocar de entrega desligamos o "seguir carro".
     setIsNavigating(false);
 
     if (selectedDelivery?.id === delivery.id) {
@@ -354,8 +466,7 @@ function MapScreenInner() {
         {deliveriesData
           .filter((d) => {
             const hasCoordinates =
-              typeof d.latitude === "number" &&
-              typeof d.longitude === "number";
+              typeof d.latitude === "number" && typeof d.longitude === "number";
             const isActive =
               d.status !== "cancelada" && d.status !== "entregue";
             return hasCoordinates && isActive;
@@ -385,17 +496,17 @@ function MapScreenInner() {
           />
         )}
 
-        {/* Rota entre motorista e entrega selecionada */}
-        {routeCoordinates.length > 0 && selectedDelivery && (
+        {/* Rota entre motorista e entrega selecionada (rota ativa: normal ou alternativa) */}
+        {activeRouteCoordinates.length > 0 && selectedDelivery && (
           <>
             <Polyline
-              coordinates={routeCoordinates}
+              coordinates={activeRouteCoordinates}
               strokeColor={ROUTE_OUTLINE_COLOR}
               strokeWidth={ROUTE_OUTLINE_WIDTH}
               zIndex={1}
             />
             <Polyline
-              coordinates={routeCoordinates}
+              coordinates={activeRouteCoordinates}
               strokeColor={ROUTE_COLOR}
               strokeWidth={ROUTE_WIDTH}
               zIndex={2}
@@ -442,6 +553,7 @@ function MapScreenInner() {
         </TouchableOpacity>
       )}
 
+      {/* Painel de entregas (BottomSheet) */}
       <DeliveryPanel
         deliveriesData={deliveriesData}
         selectedDelivery={selectedDelivery}
@@ -450,6 +562,21 @@ function MapScreenInner() {
         onLogout={handleLogout}
         onStartNavigation={handleStartNavigation}
         isLoadingList={isLoading}
+        onSheetIndexChange={setSheetIndex}
+      />
+
+      {/* FAB de simulação – agora aparece APENAS quando o sheet está no índice 0 (lista toda embaixo) */}
+      <SimulationFab
+        mode={simulation.mode}
+        isPaused={simulation.isPaused}
+        isWrongRoute={simulation.isWrongRoute}
+        visible={sheetIndex === 0}
+        onStart={simulation.start}
+        onPause={simulation.pause}
+        onResume={simulation.resume}
+        onStop={simulation.stop}
+        onToggleWrongRoute={simulation.toggleWrongRoute}
+        isNightTheme={isNightTheme}
       />
     </View>
   );

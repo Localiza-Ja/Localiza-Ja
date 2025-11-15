@@ -6,6 +6,7 @@ type SimOptions = {
   path: LatLng[]; // polyline da rota
   speedKmh?: number; // velocidade média
   tickMs?: number; // frequência da simulação
+  paused?: boolean; // 👈 NOVO: pausa a simulação sem resetar o progresso
 };
 
 export type SimulatedLocation = {
@@ -68,6 +69,7 @@ export function useSimulatedNavigation({
   path,
   speedKmh = 35,
   tickMs = 500,
+  paused = false, // 👈 NOVO: valor padrão
 }: SimOptions): SimulatedLocation | null {
   const [location, setLocation] = useState<SimulatedLocation | null>(null);
 
@@ -129,10 +131,13 @@ export function useSimulatedNavigation({
         altitude: 0,
       },
     });
-  }, [enabled, speedMs]); // 👈 aqui é a mudança
+  }, [enabled, speedMs, segments.length, path]); // mantive a lógica, só acrescentei deps relacionadas
 
   useEffect(() => {
-    if (!enabled || segments.length === 0 || totalLength === 0) return;
+    // 👇 se estiver pausado, NÃO cria/atualiza o intervalo de avanço
+    if (!enabled || paused || segments.length === 0 || totalLength === 0) {
+      return;
+    }
 
     const id = setInterval(() => {
       // avança progresso real
@@ -174,7 +179,7 @@ export function useSimulatedNavigation({
     }, tickMs);
 
     return () => clearInterval(id);
-  }, [enabled, segments, totalLength, speedMs, tickMs]);
+  }, [enabled, paused, segments, totalLength, speedMs, tickMs]);
 
   return enabled ? location : null;
 }
