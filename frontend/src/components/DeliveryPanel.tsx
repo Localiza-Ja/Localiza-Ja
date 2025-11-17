@@ -20,6 +20,10 @@ type DeliveryPanelProps = {
   onLogout: () => void;
   onStartNavigation: () => void;
   isLoadingList: boolean;
+  // mapa pode ouvir o índice atual
+  onSheetIndexChange?: (index: number) => void;
+  // mapa pode ouvir para qual índice o sheet está animando
+  onSheetTargetIndexChange?: (index: number) => void;
 };
 
 // Header fixo que também funciona como "handle" do BottomSheet
@@ -38,6 +42,8 @@ export default function DeliveryPanel({
   onLogout,
   onStartNavigation,
   isLoadingList,
+  onSheetIndexChange,
+  onSheetTargetIndexChange,
 }: DeliveryPanelProps) {
   const bottomSheetRef = useRef<BottomSheet>(null);
   const [activeSnapIndex, setActiveSnapIndex] = useState(1);
@@ -97,7 +103,16 @@ export default function DeliveryPanel({
       ref={bottomSheetRef}
       index={1}
       snapPoints={snapPoints}
-      onChange={(index) => setActiveSnapIndex(index)}
+      onChange={(index) => {
+        setActiveSnapIndex(index);
+        onSheetIndexChange?.(index);
+      }}
+      onAnimate={(_fromIndex, toIndex) => {
+        // assim que começar a animar para outro índice, avisamos o mapa
+        if (typeof toIndex === "number") {
+          onSheetTargetIndexChange?.(toIndex);
+        }
+      }}
       handleComponent={HeaderHandle}
       backgroundStyle={styles.panelBackground}
       enableContentPanningGesture
@@ -112,7 +127,7 @@ export default function DeliveryPanel({
         onUpdateStatus={handleUpdateStatusWrapped}
         onLogout={onLogout}
         onStartNavigation={handleStartAndCollapse}
-        waitFor={bottomSheetRef}
+        waitFor={bottomSheetRef} // continua igual → scroll não quebra
         isLoading={isLoadingList}
       />
     </BottomSheet>

@@ -22,7 +22,13 @@ export function useRouteToDelivery(
   const [routeCoordinates, setRouteCoordinates] = useState<LatLng[]>([]);
 
   useEffect(() => {
-    if (!driverLocation || !selectedDelivery || !selectedDelivery.latitude) {
+    // garante que temos localização válida e entrega com coordenadas
+    if (
+      !driverLocation ||
+      !selectedDelivery ||
+      typeof selectedDelivery.latitude !== "number" ||
+      typeof selectedDelivery.longitude !== "number"
+    ) {
       setRouteCoordinates([]);
       return;
     }
@@ -31,20 +37,68 @@ export function useRouteToDelivery(
       try {
         const startCoords = `${driverLocation.coords.longitude},${driverLocation.coords.latitude}`;
         const endCoords = `${selectedDelivery.longitude},${selectedDelivery.latitude}`;
-        const response = await fetch(
-          `https://api.openrouteservice.org/v2/directions/driving-car?api_key=${ORS_API_KEY}&start=${startCoords}&end=${endCoords}`
-        );
-        const json = await response.json();
+        const url = `https://api.openrouteservice.org/v2/directions/driving-car?api_key=${ORS_API_KEY}&start=${startCoords}&end=${endCoords}`;
+
+        const response = await fetch(url);
+
+        const contentType = response.headers.get("content-type") || "";
+        const text = await response.text();
+
+        // se status não for 2xx, loga e não tenta parsear
+        if (!response.ok) {
+          console.error(
+            "ERRO NA API DE ROTAS (status):",
+            response.status,
+            response.statusText,
+            "| trecho da resposta:",
+            text.slice(0, 200)
+          );
+          setRouteCoordinates([]);
+          return;
+        }
+
+        // ✅ ORS responde "application/geo+json", que ainda é JSON.
+        // Então agora aceito QUALQUER content-type que contenha "json".
+        if (!contentType.toLowerCase().includes("json")) {
+          console.error(
+            "ERRO NA API DE ROTAS (content-type sem json):",
+            contentType,
+            "| trecho da resposta:",
+            text.slice(0, 200)
+          );
+          setRouteCoordinates([]);
+          return;
+        }
+
+        let json: any;
+        try {
+          json = JSON.parse(text);
+        } catch (parseError) {
+          console.error(
+            "ERRO AO PARSEAR JSON DO ORS:",
+            parseError,
+            "| trecho da resposta:",
+            text.slice(0, 200)
+          );
+          setRouteCoordinates([]);
+          return;
+        }
+
         if (json.features && json.features.length > 0) {
           const points = json.features[0].geometry.coordinates.map(
-            (p: number[]) => ({ latitude: p[1], longitude: p[0] })
+            (p: number[]) => ({
+              latitude: p[1],
+              longitude: p[0],
+            })
           );
           setRouteCoordinates(points);
         } else {
-          console.error("ERRO NA API DE ROTAS:", json);
+          console.error("ERRO NA API DE ROTAS (sem features):", json);
+          setRouteCoordinates([]);
         }
       } catch (error) {
         console.error("ERRO AO BUSCAR ROTA DO ORS:", error);
+        setRouteCoordinates([]);
       }
     };
 
