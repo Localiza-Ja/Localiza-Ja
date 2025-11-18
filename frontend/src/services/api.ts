@@ -20,7 +20,7 @@ export type { EntregaStatus } from "../types";
 
 // Configura baseURL e timeout do backend Flask.
 export const api = axios.create({
-  baseURL: "http://192.168.15.3:5000",
+  baseURL: "http://192.168.2.104:5000",
   timeout: 15000,
 });
 

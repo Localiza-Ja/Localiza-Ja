@@ -27,7 +27,14 @@ import {
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import MapView, { Marker, Polyline, Circle, LatLng } from "react-native-maps";
-import React, { useRef, useState, useEffect, memo, useMemo } from "react";
+import React, {
+  useRef,
+  useState,
+  useEffect,
+  memo,
+  useMemo,
+  useCallback,
+} from "react";
 import { Delivery } from "../types";
 import AppHeader from "../components/AppHeader";
 import { ToastProvider, useToast } from "../components/Toast";
@@ -47,10 +54,10 @@ import {
 } from "../hooks/useSimulatedNavigation";
 import { useSimulationController } from "../hooks/useSimulationController";
 import SimulationFab from "../components/SimulationFab";
-
 import mapStyleLight from "../styles/mapStyleLight";
 import mapStyleDark from "../styles/mapStyleDark";
-import { ORS_API_KEY } from "../utils/geocoding";
+import { useWrongRoute } from "../hooks/useWrongRoute";
+import { useRecalculatedCorrectRoute } from "../hooks/useRecalculatedCorrectRoute";
 
 // Imagens do app (logo e seta do motorista).
 const appLogo = require("../../assets/images/lj-logo.png");
@@ -125,81 +132,66 @@ function MapScreenInner() {
   // Localização em tempo real e trilha já percorrida.
   const { driverLocation, pastCoordinates } = useDriverLocation();
 
-  // Rota entre motorista e entrega selecionada.
+  // Ponto onde o motorista estava quando clicou em "Errar"
+  const [wrongRouteOrigin, setWrongRouteOrigin] = useState<LatLng | null>(null);
+
+  // Rota entre motorista e entrega selecionada (rota CORRETA vinda da API principal).
   const { routeCoordinates, clearRoute } = useRouteToDelivery(
     driverLocation,
     selectedDelivery
   );
 
-  // Rota alternativa para o modo "errar" (usa ORS com preference=shortest).
-  const [wrongRouteCoordinates, setWrongRouteCoordinates] = useState<LatLng[]>(
-    []
-  );
-
-  useEffect(() => {
-    // Se não está no modo "errar", limpa a rota alternativa
-    if (!simulation.isWrongRoute) {
-      setWrongRouteCoordinates([]);
-      return;
-    }
-
-    if (!driverLocation || !selectedDelivery || !selectedDelivery.latitude) {
-      setWrongRouteCoordinates([]);
-      return;
-    }
-
-    const fetchWrongRoute = async () => {
-      try {
-        const startCoords = `${driverLocation.coords.longitude},${driverLocation.coords.latitude}`;
-        const endCoords = `${selectedDelivery.longitude},${selectedDelivery.latitude}`;
-
-        const response = await fetch(
-          `https://api.openrouteservice.org/v2/directions/driving-car?api_key=${ORS_API_KEY}&start=${startCoords}&end=${endCoords}&preference=shortest`
-        );
-        const json = await response.json();
-
-        if (json.features && json.features.length > 0) {
-          const points = json.features[0].geometry.coordinates.map(
-            (p: number[]) => ({
-              latitude: p[1],
-              longitude: p[0],
-            })
-          );
-          setWrongRouteCoordinates(points);
-        } else {
-          console.warn("ERRO NA API DE ROTAS ALTERNATIVAS:", json);
-          setWrongRouteCoordinates([]);
-        }
-      } catch (error) {
-        console.error("ERRO AO BUSCAR ROTA ALTERNATIVA DO ORS:", error);
-        setWrongRouteCoordinates([]);
-      }
-    };
-
-    fetchWrongRoute();
-  }, [simulation.isWrongRoute, driverLocation, selectedDelivery]);
-
-  // Rota "ativa" que será desenhada e usada pela simulação
-  const activeRouteCoordinates =
-    simulation.isWrongRoute && wrongRouteCoordinates.length > 1
-      ? wrongRouteCoordinates
-      : routeCoordinates;
-
-  // --- BLOCO: motor de simulação (usa apenas rota + flags de simulação) ---
-  const simulationPath = useMemo(() => {
-    if (!simulation.isEnabled || activeRouteCoordinates.length < 2) return [];
-    return activeRouteCoordinates as LatLng[];
-  }, [simulation.isEnabled, activeRouteCoordinates]);
-
-  const simulatedLocation = useSimulatedNavigation({
-    enabled: simulation.isEnabled && simulationPath.length > 1, // 👈 NÃO desliga quando pausa
-    paused: simulation.isPaused, // 👈 pausa só o avanço interno, sem resetar progresso
-    path: simulationPath,
+  // Rota ERRADA para o modo "errar" (apenas para o ponteiro).
+  const wrongRouteCoordinates = useWrongRoute({
+    isWrongRoute: simulation.isWrongRoute,
+    origin: wrongRouteOrigin,
   });
 
-  // Guarda a última posição simulada para usar quando PAUSAR
+  // --- BLOCO: motor de simulação (usa apenas rota + flags de simulação) ---
   const [frozenSimLocation, setFrozenSimLocation] =
     useState<SimulatedLocation | null>(null);
+
+  // Rota correta recalculada que será usada como "oficial" depois de errar
+  const [savedCorrectPathAfterError, setSavedCorrectPathAfterError] = useState<
+    LatLng[] | null
+  >(null);
+
+  const simulationPath = useMemo(() => {
+    if (!simulation.isEnabled) return [];
+
+    // 1) Modo ERRAR → segue rota errada fixa se existir
+    if (simulation.isWrongRoute && wrongRouteCoordinates.length > 1) {
+      return wrongRouteCoordinates as LatLng[];
+    }
+
+    // 2) Saiu do ERRAR → se temos rota correta recalculada salva, usa ela
+    if (
+      !simulation.isWrongRoute &&
+      savedCorrectPathAfterError &&
+      savedCorrectPathAfterError.length > 1
+    ) {
+      return savedCorrectPathAfterError as LatLng[];
+    }
+
+    // 3) Caso padrão → usa rota correta original da API principal
+    if (routeCoordinates.length > 1) {
+      return routeCoordinates as LatLng[];
+    }
+
+    return [];
+  }, [
+    simulation.isEnabled,
+    simulation.isWrongRoute,
+    wrongRouteCoordinates,
+    savedCorrectPathAfterError,
+    routeCoordinates,
+  ]);
+
+  const simulatedLocation = useSimulatedNavigation({
+    enabled: simulation.isEnabled && simulationPath.length > 1,
+    paused: simulation.isPaused,
+    path: simulationPath,
+  });
 
   useEffect(() => {
     if (simulatedLocation) {
@@ -224,10 +216,47 @@ function MapScreenInner() {
     ? simulatedLocation ?? frozenSimLocation ?? driverLocation
     : driverLocation;
 
-  // Localização efetiva (após aplicar qualquer "erro de rota").
-  // Agora NÃO aplicamos mais offset perpendicular, justamente
-  // para não deixar o carro "no meio do quarteirão".
-  // O "erro" é representado pela rota alternativa (activeRouteCoordinates).
+  // Rota CORRETA recalculada de forma leve ENQUANTO estiver errando,
+  // usando a posição do simulador (ou a real, se não tiver simulador ainda).
+  const recalculatedRouteCoordinates = useRecalculatedCorrectRoute({
+    enabled: simulation.isEnabled && simulation.isWrongRoute,
+    currentLocation: simulatedLocation ?? driverLocation,
+    selectedDelivery,
+  });
+
+  // Guarda a última rota correta recalculada enquanto está errando
+  useEffect(() => {
+    if (simulation.isWrongRoute && recalculatedRouteCoordinates.length > 1) {
+      setSavedCorrectPathAfterError(recalculatedRouteCoordinates);
+    }
+  }, [simulation.isWrongRoute, recalculatedRouteCoordinates]);
+
+  // Rota que será desenhada no MAPA (sempre a CORRETA: original ou recalculada)
+  const displayedRouteCoordinates = useMemo(() => {
+    // Enquanto estiver errando, mostramos a rota correta recalculada se existir
+    if (simulation.isWrongRoute) {
+      if (recalculatedRouteCoordinates.length > 1) {
+        return recalculatedRouteCoordinates;
+      }
+      return routeCoordinates;
+    }
+
+    // Depois que voltou pra "Correta", se temos uma rota correta nova salva,
+    // usamos ela como a rota oficial.
+    if (savedCorrectPathAfterError && savedCorrectPathAfterError.length > 1) {
+      return savedCorrectPathAfterError;
+    }
+
+    // Caso padrão: rota original
+    return routeCoordinates;
+  }, [
+    simulation.isWrongRoute,
+    recalculatedRouteCoordinates,
+    savedCorrectPathAfterError,
+    routeCoordinates,
+  ]);
+
+  // Localização efetiva (não aplicamos offset perpendicular).
   const effectiveLocation = baseLocation ?? driverLocation ?? null;
 
   const { showToast } = useToast();
@@ -256,10 +285,41 @@ function MapScreenInner() {
     }
   }, [isNavigating, effectiveLocation, isMapCentered]);
 
+  // --- ALERTAS DE DIAGNÓSTICO DA SIMULAÇÃO / ERRAR ---
+
+  const wrongRouteAlertShownRef = useRef(false);
+  useEffect(() => {
+    if (!simulation.isEnabled || !simulation.isWrongRoute) {
+      wrongRouteAlertShownRef.current = false;
+      return;
+    }
+
+    if (wrongRouteCoordinates.length < 2 && !wrongRouteAlertShownRef.current) {
+      wrongRouteAlertShownRef.current = true;
+    }
+  }, [
+    simulation.isEnabled,
+    simulation.isWrongRoute,
+    wrongRouteCoordinates.length,
+  ]);
+
+  const correctRouteAlertShownRef = useRef(false);
+  useEffect(() => {
+    if (!simulation.isEnabled) {
+      correctRouteAlertShownRef.current = false;
+      return;
+    }
+
+    if (
+      displayedRouteCoordinates.length < 2 &&
+      !correctRouteAlertShownRef.current
+    ) {
+      correctRouteAlertShownRef.current = true;
+    }
+  }, [simulation.isEnabled, displayedRouteCoordinates.length]);
+
   // Seleção/deseleção de entrega com ajuste de câmera.
   function handleDeliveryPress(delivery: Delivery) {
-    // Navegação (seguir carro) e simulação são independentes,
-    // mas ao trocar de entrega desligamos o "seguir carro".
     setIsNavigating(false);
 
     if (selectedDelivery?.id === delivery.id) {
@@ -288,7 +348,6 @@ function MapScreenInner() {
     }
   }
 
-  // Auxiliar para mapa usar mensagens diferentes por status.
   const getToastForStatus = (status: EntregaStatus) => {
     switch (status) {
       case "em_rota":
@@ -319,7 +378,6 @@ function MapScreenInner() {
     }
   };
 
-  // Atualiza status de entrega com integração de API e UI.
   async function handleUpdateStatus(
     deliveryId: string,
     newStatus: EntregaStatus,
@@ -372,7 +430,6 @@ function MapScreenInner() {
       const toastConfig = getToastForStatus(newStatus);
       showToast(toastConfig);
 
-      // se entrou em rota, garante navegação e entrega selecionada
       if (newStatus === "em_rota") {
         const startedDelivery = updatedDeliveries.find(
           (d) => d.id === deliveryId
@@ -406,7 +463,6 @@ function MapScreenInner() {
     }
   }
 
-  // Início da navegação: habilita modo "carro central" e câmera seguindo.
   function handleStartNavigation() {
     if (selectedDelivery && effectiveLocation && mapRef.current) {
       setIsNavigating(true);
@@ -414,14 +470,72 @@ function MapScreenInner() {
     }
   }
 
-  // Recentraliza o mapa na posição atual do motorista.
   const handleCenterMap = () => {
     if (effectiveLocation && mapRef.current) {
       setIsMapCentered(true);
     }
   };
 
-  // Ícone do botão de recentralizar.
+  // Handlers da simulação para controlar também a navegação/câmera
+  const handleSimulationStart = useCallback(() => {
+    simulation.start();
+    setWrongRouteOrigin(null);
+    setSavedCorrectPathAfterError(null); // começa sempre "limpo"
+
+    if (selectedDelivery && effectiveLocation && mapRef.current) {
+      setIsNavigating(true);
+      setIsMapCentered(true);
+    }
+  }, [simulation, selectedDelivery, effectiveLocation]);
+
+  const handleSimulationStop = useCallback(() => {
+    simulation.stop();
+    setWrongRouteOrigin(null);
+    setSavedCorrectPathAfterError(null);
+    setIsNavigating(false);
+    setIsMapCentered(true);
+  }, [simulation]);
+
+  const handleToggleWrongRoute = useCallback(() => {
+    // Não deixa errar se a simulação não estiver ligada
+    if (!simulation.isEnabled) {
+      Alert.alert(
+        "Simulação",
+        "Para errar o caminho, primeiro inicie a simulação."
+      );
+      return;
+    }
+
+    // Ativando o modo ERRAR
+    if (!simulation.isWrongRoute) {
+      const loc =
+        simulatedLocation?.coords ??
+        frozenSimLocation?.coords ??
+        driverLocation?.coords ??
+        null;
+
+      if (loc) {
+        setWrongRouteOrigin({
+          latitude: loc.latitude,
+          longitude: loc.longitude,
+        });
+      } else {
+        setWrongRouteOrigin(null);
+      }
+    } else {
+      // Voltando para a CORRETA → não limpamos savedCorrectPathAfterError,
+      // apenas a origem da rota errada. A rota correta recalculada já está salva.
+      setWrongRouteOrigin(null);
+    }
+
+    simulation.toggleWrongRoute();
+  }, [
+    simulation,
+    simulatedLocation,
+    frozenSimLocation,
+    driverLocation?.coords,
+  ]);
+
   const centerIconName = isNavigating ? "navigation" : "compass";
 
   const colorScheme = useColorScheme();
@@ -496,17 +610,17 @@ function MapScreenInner() {
           />
         )}
 
-        {/* Rota entre motorista e entrega selecionada (rota ativa: normal ou alternativa) */}
-        {activeRouteCoordinates.length > 0 && selectedDelivery && (
+        {/* Rota entre motorista e entrega selecionada (SEMPRE a rota CORRETA: original ou recalculada) */}
+        {displayedRouteCoordinates.length > 0 && selectedDelivery && (
           <>
             <Polyline
-              coordinates={activeRouteCoordinates}
+              coordinates={displayedRouteCoordinates}
               strokeColor={ROUTE_OUTLINE_COLOR}
               strokeWidth={ROUTE_OUTLINE_WIDTH}
               zIndex={1}
             />
             <Polyline
-              coordinates={activeRouteCoordinates}
+              coordinates={displayedRouteCoordinates}
               strokeColor={ROUTE_COLOR}
               strokeWidth={ROUTE_WIDTH}
               zIndex={2}
@@ -565,17 +679,17 @@ function MapScreenInner() {
         onSheetIndexChange={setSheetIndex}
       />
 
-      {/* FAB de simulação – agora aparece APENAS quando o sheet está no índice 0 (lista toda embaixo) */}
+      {/* FAB de simulação */}
       <SimulationFab
         mode={simulation.mode}
         isPaused={simulation.isPaused}
         isWrongRoute={simulation.isWrongRoute}
         visible={sheetIndex === 0}
-        onStart={simulation.start}
+        onStart={handleSimulationStart}
         onPause={simulation.pause}
         onResume={simulation.resume}
-        onStop={simulation.stop}
-        onToggleWrongRoute={simulation.toggleWrongRoute}
+        onStop={handleSimulationStop}
+        onToggleWrongRoute={handleToggleWrongRoute}
         isNightTheme={isNightTheme}
       />
     </View>

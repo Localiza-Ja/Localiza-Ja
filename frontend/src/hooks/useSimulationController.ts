@@ -1,81 +1,89 @@
 // frontend/src/hooks/useSimulationController.ts
-import { useCallback, useState } from "react";
 
-export type SimulationMode = "off" | "running" | "paused" | "wrongRoute";
-
-type SimulationState = {
-  enabled: boolean;
-  paused: boolean;
-  wrongRoute: boolean;
-};
 
 /**
  * Controla o estado de alto nível da simulação de rota.
  *
- * - Agora usamos flags internas (enabled/paused/wrongRoute)
- *   para permitir que "Pausar/Retomar" e "Errar/Correta" sejam
- *   independentes.
- * - `mode` continua existindo para facilitar integração com a UI
- *   (ícone, estados visuais).
+ * IMPORTANTE:
+ * - Esta lógica é independente do mapa.
+ * - O mapa apenas consome `mode` e flags derivadas.
+ * - Para desativar a simulação no futuro, basta nunca chamar `start()`
+ *   e ignorar os dados simulados no map.tsx.
  */
+
+import { useCallback, useState } from "react";
+
+export type SimulationMode = "off" | "running" | "paused" | "wrongRoute";
 export function useSimulationController() {
-  const [state, setState] = useState<SimulationState>({
-    enabled: false,
-    paused: false,
-    wrongRoute: false,
-  });
+  const [enabled, setEnabled] = useState(false);
+  const [paused, setPaused] = useState(false);
+  const [wrongRoute, setWrongRoute] = useState(false);
 
+  /**
+   * Inicia a simulação:
+   * - Liga simulação
+   * - Despausa
+   * - Garante que começa na rota correta (sem erro ativo)
+   */
   const start = useCallback(() => {
-    // Liga simulação, despausa e volta para rota correta
-    setState({
-      enabled: true,
-      paused: false,
-      wrongRoute: false,
-    });
+    setEnabled(true);
+    setPaused(false);
+    setWrongRoute(false);
   }, []);
 
+  /**
+   * Pausa a simulação:
+   * - NÃO desliga
+   * - NÃO mexe no “errando” ou não, só congela o movimento
+   */
   const pause = useCallback(() => {
-    setState((prev) => {
-      if (!prev.enabled || prev.paused) return prev;
-      return { ...prev, paused: true };
-    });
+    setPaused(true);
   }, []);
 
+  /**
+   * Retoma a simulação:
+   * - Volta a andar de onde parou
+   * - Mantém se estava em rota correta ou errada
+   */
   const resume = useCallback(() => {
-    setState((prev) => {
-      if (!prev.enabled || !prev.paused) return prev;
-      return { ...prev, paused: false };
-    });
+    setPaused(false);
   }, []);
 
+  /**
+   * Encerra totalmente a simulação:
+   * - Desliga
+   * - Reseta pausa
+   * - Reseta rota errada
+   */
   const stop = useCallback(() => {
-    // Desliga toda a simulação
-    return setState({
-      enabled: false,
-      paused: false,
-      wrongRoute: false,
-    });
+    setEnabled(false);
+    setPaused(false);
+    setWrongRoute(false);
   }, []);
 
+  /**
+   * Alterna entre:
+   * - Rota correta  → Rota errada
+   * - Rota errada   → Rota correta
+   *
+   * Não pausa nem desliga a simulação.
+   * Só muda a forma que o mapa vai desenhar/mover o ponteiro.
+   */
   const toggleWrongRoute = useCallback(() => {
-    setState((prev) => {
-      if (!prev.enabled) return prev;
-      return { ...prev, wrongRoute: !prev.wrongRoute };
-    });
+    setWrongRoute((prev) => !prev);
   }, []);
 
-  // Deriva o "mode" a partir das flags internas
-  const mode: SimulationMode = !state.enabled
+  const isEnabled = enabled;
+  const isPaused = paused;
+  const isWrongRoute = wrongRoute;
+
+  const mode: SimulationMode = !enabled
     ? "off"
-    : state.paused
+    : paused
     ? "paused"
-    : state.wrongRoute
+    : wrongRoute
     ? "wrongRoute"
     : "running";
-
-  const isEnabled = state.enabled;
-  const isPaused = state.paused;
-  const isWrongRoute = state.wrongRoute;
 
   return {
     mode,

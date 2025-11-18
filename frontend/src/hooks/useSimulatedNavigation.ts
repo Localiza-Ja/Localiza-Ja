@@ -1,20 +1,21 @@
+// frontend/src/hooks/useSimulatedNavigation.ts
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { LatLng } from "react-native-maps";
 
 type SimOptions = {
   enabled: boolean;
-  path: LatLng[]; // polyline da rota
-  speedKmh?: number; // velocidade média
-  tickMs?: number; // frequência da simulação
-  paused?: boolean; // 👈 NOVO: pausa a simulação sem resetar o progresso
+  path: LatLng[];
+  speedKmh?: number;
+  tickMs?: number;
+  paused?: boolean;
 };
 
 export type SimulatedLocation = {
   coords: {
     latitude: number;
     longitude: number;
-    speed: number; // m/s
-    heading: number; // graus 0-360
+    speed: number;
+    heading: number;
     accuracy: number;
     altitude: number;
   };
@@ -69,7 +70,7 @@ export function useSimulatedNavigation({
   path,
   speedKmh = 35,
   tickMs = 500,
-  paused = false, // 👈 NOVO: valor padrão
+  paused = false,
 }: SimOptions): SimulatedLocation | null {
   const [location, setLocation] = useState<SimulatedLocation | null>(null);
 
@@ -84,8 +85,8 @@ export function useSimulatedNavigation({
       from: LatLng;
       to: LatLng;
       length: number;
-      cumStart: number; // distância acumulada até o início desse segmento
-      cumEnd: number; // distância acumulada até o fim desse segmento
+      cumStart: number;
+      cumEnd: number;
     }[] = [];
 
     let acc = 0;
@@ -110,7 +111,8 @@ export function useSimulatedNavigation({
 
   const speedMs = (speedKmh * 1000) / 3600;
 
-  // ✅ reset só quando habilita/desabilita simulação ou muda velocidade
+  // Sempre que ativar/desativar a simulação OU trocar a rota,
+  // reseta o progresso e começa do primeiro ponto do caminho atual.
   useEffect(() => {
     progressRef.current = 0;
 
@@ -119,7 +121,6 @@ export function useSimulatedNavigation({
       return;
     }
 
-    // começa exatamente no primeiro ponto da rota
     setLocation({
       coords: {
         latitude: path[0].latitude,
@@ -131,10 +132,10 @@ export function useSimulatedNavigation({
         altitude: 0,
       },
     });
-  }, [enabled, speedMs, segments.length, path]); // mantive a lógica, só acrescentei deps relacionadas
+  }, [enabled, speedMs, path, segments.length, totalLength]);
 
   useEffect(() => {
-    // 👇 se estiver pausado, NÃO cria/atualiza o intervalo de avanço
+    // se estiver pausado ou sem rota, não avança
     if (!enabled || paused || segments.length === 0 || totalLength === 0) {
       return;
     }
@@ -154,7 +155,6 @@ export function useSimulatedNavigation({
       if (displayProgress < 0) displayProgress = 0;
       if (displayProgress > totalLength) displayProgress = totalLength;
 
-      // encontra o segmento em que o displayProgress está
       const seg =
         segments.find(
           (s) => displayProgress >= s.cumStart && displayProgress <= s.cumEnd
