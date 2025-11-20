@@ -57,8 +57,6 @@ export function useRouteToDelivery(
           return;
         }
 
-        // ✅ ORS responde "application/geo+json", que ainda é JSON.
-        // Então agora aceito QUALQUER content-type que contenha "json".
         if (!contentType.toLowerCase().includes("json")) {
           console.error(
             "ERRO NA API DE ROTAS (content-type sem json):",

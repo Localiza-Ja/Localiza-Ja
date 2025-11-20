@@ -75,8 +75,8 @@ const HeaderSection = ({ tips, keyboardAnimation }: HeaderSectionProps) => {
   const animatedContainerStyle = useAnimatedStyle(() => {
     const height = interpolate(
       keyboardAnimation.value,
-      [0, 1], // De (teclado fechado) para (teclado aberto)
-      [screenHeight * 0.4, screenHeight * 0.14] // A altura varia de 40% para 14% da tela
+      [0, 1],
+      [screenHeight * 0.4, screenHeight * 0.14]
     );
     return { height };
   });
@@ -85,7 +85,7 @@ const HeaderSection = ({ tips, keyboardAnimation }: HeaderSectionProps) => {
   const mainContentStyle = useAnimatedStyle(() => {
     const opacity = interpolate(
       keyboardAnimation.value,
-      [0, 0.5], // A opacidade vai de 1 a 0 na primeira metade da animação do teclado
+      [0, 0.5],
       [1, 0]
     );
     return { opacity };
@@ -95,7 +95,7 @@ const HeaderSection = ({ tips, keyboardAnimation }: HeaderSectionProps) => {
   const smallLogoStyle = useAnimatedStyle(() => {
     const opacity = interpolate(
       keyboardAnimation.value,
-      [0.5, 1], // A opacidade vai de 0 a 1 na segunda metade da animação do teclado
+      [0.5, 1],
       [0, 1]
     );
     return { opacity };
@@ -159,7 +159,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 24,
     paddingBottom: 50,
-    overflow: "hidden", // Garante que a animação não "vaze" para fora no Android
+    overflow: "hidden",
   },
   absoluteFill: {
     position: "absolute",
@@ -179,7 +179,7 @@ const styles = StyleSheet.create({
   },
   mainContentContainer: {
     flex: 1,
-    justifyContent: "space-between", // Empurra o logo para cima e a seção de baixo para baixo
+    justifyContent: "space-between",
   },
   topSection: {
     alignItems: "center",

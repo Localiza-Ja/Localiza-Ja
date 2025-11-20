@@ -19,7 +19,6 @@ import { COLORS, SPACING } from "../styles/theme";
 // ====================================================================================
 
 interface InputFieldProps extends TextInputProps {
-  // O texto exibido no label acima do campo de texto.
   label: string;
 }
 

@@ -20,9 +20,7 @@ type DeliveryPanelProps = {
   onLogout: () => void;
   onStartNavigation: () => void;
   isLoadingList: boolean;
-  // mapa pode ouvir o índice atual
   onSheetIndexChange?: (index: number) => void;
-  // mapa pode ouvir para qual índice o sheet está animando
   onSheetTargetIndexChange?: (index: number) => void;
 };
 
@@ -94,13 +92,13 @@ export default function DeliveryPanel({
 
       await onUpdateStatus(deliveryId, newStatus, details);
     } catch {
-      // Erros já são tratados na tela do mapa.
     }
   };
 
   return (
     <BottomSheet
       ref={bottomSheetRef}
+      style={styles.sheetContainer}
       index={1}
       snapPoints={snapPoints}
       onChange={(index) => {
@@ -108,7 +106,6 @@ export default function DeliveryPanel({
         onSheetIndexChange?.(index);
       }}
       onAnimate={(_fromIndex, toIndex) => {
-        // assim que começar a animar para outro índice, avisamos o mapa
         if (typeof toIndex === "number") {
           onSheetTargetIndexChange?.(toIndex);
         }
@@ -127,7 +124,7 @@ export default function DeliveryPanel({
         onUpdateStatus={handleUpdateStatusWrapped}
         onLogout={onLogout}
         onStartNavigation={handleStartAndCollapse}
-        waitFor={bottomSheetRef} // continua igual → scroll não quebra
+        waitFor={bottomSheetRef}
         isLoading={isLoadingList}
       />
     </BottomSheet>
@@ -135,15 +132,16 @@ export default function DeliveryPanel({
 }
 
 const styles = StyleSheet.create({
-  // Fundo do bottom sheet: azul escuro com borda superior arredondada
+  sheetContainer: {
+    zIndex: 50,
+    elevation: 50,
+  },
   panelBackground: {
     backgroundColor: "#1F2937",
     borderTopLeftRadius: 40,
     borderTopRightRadius: 40,
     overflow: "hidden",
   },
-
-  // Header fixo (handle)
   headerContainer: {
     backgroundColor: "#1F2937",
     paddingTop: 12,

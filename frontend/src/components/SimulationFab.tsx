@@ -1,4 +1,15 @@
 // frontend/src/components/SimulationFab.tsx
+
+
+/**
+ * Botão fixo no canto superior direito para controlar a simulação.
+ *
+ * - Não é arrastável.
+ * - O botão "Simulação" NÃO se mexe quando o menu abre.
+ * - Ao abrir, aparecem "bolinhas" (mini FABs) alinhadas verticalmente,
+ *   com animação em sequência (stagger).
+ */
+
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
@@ -20,17 +31,9 @@ type SimulationFabProps = {
   onResume: () => void;
   onStop: () => void;
   onToggleWrongRoute: () => void;
-  isNightTheme: boolean; // 👈 NOVO
+  isNightTheme: boolean;
 };
 
-/**
- * Botão fixo no canto superior direito para controlar a simulação.
- *
- * - Não é arrastável.
- * - O botão "Simulação" NÃO se mexe quando o menu abre.
- * - Ao abrir, aparecem "bolinhas" (mini FABs) alinhadas verticalmente,
- *   com animação em sequência (stagger).
- */
 const SimulationFab: React.FC<SimulationFabProps> = ({
   mode,
   isPaused,
@@ -45,7 +48,6 @@ const SimulationFab: React.FC<SimulationFabProps> = ({
 }) => {
   const [menuOpen, setMenuOpen] = useState(false);
 
-  // até 3 ações → 3 animações independentes
   const itemAnims = useRef([
     new Animated.Value(0),
     new Animated.Value(0),
@@ -117,7 +119,6 @@ const SimulationFab: React.FC<SimulationFabProps> = ({
       const opens = itemAnims
         .map((anim, index) => {
           if (index >= enabledCount) {
-            // garante que itens não usados fiquem escondidos
             anim.setValue(0);
             return null;
           }
@@ -254,7 +255,7 @@ const styles = StyleSheet.create({
   // canto superior direito
   container: {
     position: "absolute",
-    top: 80, // ajusta conforme o header
+    top: 80,
     right: 16,
     zIndex: 120,
     width: "100%",
@@ -280,20 +281,20 @@ const styles = StyleSheet.create({
   },
   mainFabText: {
     fontWeight: "600",
-    marginLeft: 8, // texto antes do ícone
+    marginLeft: 8,
     fontSize: 14,
   },
 
   // coluna de actions (bolinhas)
   actionsColumn: {
     position: "absolute",
-    top: 48, // distância do botão até a primeira bolinha
+    top: 48,
     right: 10,
   },
   actionWrapper: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "flex-end", // 👈 alinha tudo à direita
+    justifyContent: "flex-end",
     marginTop: 10,
   },
   actionFab: {

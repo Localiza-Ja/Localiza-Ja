@@ -119,7 +119,7 @@ export default function DeliveriesList({
           contentContainerStyle={styles.listContentContainer}
           removeClippedSubviews={false}
           extraData={focusedDelivery}
-          waitFor={waitFor}
+          simultaneousHandlers={waitFor}
           overScrollMode="always"
           keyboardShouldPersistTaps="handled"
         />

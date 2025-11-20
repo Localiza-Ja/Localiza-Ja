@@ -75,12 +75,12 @@ const styles = StyleSheet.create({
   modal: {
     justifyContent: "center",
     alignItems: "center",
-    margin: 0, // Remove margens padrão do react-native-modal
+    margin: 0,
   },
   confirmButtonBase: {
-    backgroundColor: "#FCA14E", // Cor primária (Laranja) - Padrão
+    backgroundColor: "#FCA14E",
   },
   confirmTextBase: {
-    color: "#FFFFFF", // Branco - Padrão
+    color: "#FFFFFF",
   },
 });

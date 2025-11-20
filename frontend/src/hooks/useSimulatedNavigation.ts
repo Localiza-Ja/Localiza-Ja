@@ -146,7 +146,7 @@ export function useSimulatedNavigation({
       let progress = progressRef.current + step;
 
       if (progress > totalLength) {
-        progress = totalLength; // trava no fim (não reinicia)
+        progress = totalLength;
       }
       progressRef.current = progress;
 
