@@ -1,5 +1,12 @@
 import { router, useLocalSearchParams } from "expo-router";
-import { View, StyleSheet, Text, ActivityIndicator, Alert, Image } from "react-native";
+import {
+  View,
+  StyleSheet,
+  Text,
+  ActivityIndicator,
+  Alert,
+  Image,
+} from "react-native";
 import { StatusBar } from "expo-status-bar";
 import MapView, { Marker } from "react-native-maps";
 import React, { useRef, useState, useEffect } from "react";
@@ -7,6 +14,9 @@ import { api, Delivery as APIDelivery } from "../services/api";
 import AppHeader from "../components/AppHeader";
 import DeliveryInRoute from "../components/DeliveryInRoute";
 import DeliveryNotStarted from "../components/DeliveryNotStarted";
+import DeliveryDelivered from "../components/DeliveryDelivered";
+import DeliveryNotDelivered from "../components/DeliveryNotDelivered";
+import DeliveryCanceled from "../components/DeliveryCanceled";
 import { Svg, Path } from "react-native-svg";
 
 const appLogo = require("../../assets/images/lj-logo.png");
@@ -97,6 +107,7 @@ type Delivery = {
   status: string;
   latitude: number;
   longitude: number;
+  motivo: string;
 };
 
 export default function MapScreen() {
@@ -105,7 +116,6 @@ export default function MapScreen() {
   const [selectedDelivery, setSelectedDelivery] = useState<Delivery | null>(
     null
   );
-  const [deliveriesData, setDeliveriesData] = useState<Delivery[]>([]);
   const [driverLocation, setDriverLocation] = useState<LocationObject | null>(
     null
   );
@@ -113,7 +123,7 @@ export default function MapScreen() {
   const [error, setError] = useState<string | null>(null);
   const [motoristaId, setMotoristaId] = useState<string | null>(null);
 
-  // 1. CARREGAMENTO INICIAL DA ENTREGA
+  // 1. CARREGAR ENTREGA
   useEffect(() => {
     const fetchDelivery = async () => {
       if (!params.pedido) {
@@ -130,7 +140,7 @@ export default function MapScreen() {
 
         if (!entrega) throw new Error("Entrega não encontrada.");
 
-        // Geocodificar
+        // Geocodificar endereço
         let deliveryCoords = { latitude: -22.9056, longitude: -47.0608 };
         const geoResult = await geocodeAddress(entrega.endereco_entrega);
         if (geoResult) {
@@ -164,19 +174,19 @@ export default function MapScreen() {
           status: statusMap[entrega.status] ?? "Desconhecido",
           latitude: deliveryCoords.latitude,
           longitude: deliveryCoords.longitude,
+          motivo: entrega.motivo || "",
         };
 
-        setDeliveriesData([mappedDelivery]);
         setSelectedDelivery(mappedDelivery);
         setMotoristaId(entrega.motorista_id?.toString() || null);
 
-        // Centralizar no destino
+        // Centraliza no destino apenas na primeira carga
         mapRef.current?.animateToRegion(
           {
             latitude: deliveryCoords.latitude,
             longitude: deliveryCoords.longitude,
-            latitudeDelta: 0.1,
-            longitudeDelta: 0.1,
+            latitudeDelta: 0.08,
+            longitudeDelta: 0.08,
           },
           1000
         );
@@ -192,7 +202,7 @@ export default function MapScreen() {
     fetchDelivery();
   }, [params.pedido]);
 
-  // 2. ATUALIZAÇÃO DO MOTORISTA A CADA 5 MINUTOS
+  // 2. ATUALIZAR POSIÇÃO DO MOTORISTA + ZOOM AUTOMÁTICO NO MOTORISTA
   useEffect(() => {
     if (
       !motoristaId ||
@@ -250,31 +260,46 @@ export default function MapScreen() {
     return () => clearInterval(interval);
   }, [motoristaId, selectedDelivery?.status]);
 
-  const handleLogout = () => router.push("/");
-  const handleDeliveryPress = (delivery: Delivery) => {
-    setSelectedDelivery(delivery);
+  // Funções de clique nos marcadores (mantidas para uso manual)
+  const goToDelivery = () => {
+    if (!selectedDelivery) return;
     mapRef.current?.animateToRegion(
       {
-        latitude: delivery.latitude,
-        longitude: delivery.longitude,
-        latitudeDelta: 0.01,
-        longitudeDelta: 0.01,
+        latitude: selectedDelivery.latitude,
+        longitude: selectedDelivery.longitude,
+        latitudeDelta: 0.015,
+        longitudeDelta: 0.015,
       },
-      1000
+      800
     );
   };
 
-  // LOADING
+  const goToDriver = () => {
+    if (!driverLocation) return;
+    mapRef.current?.animateToRegion(
+      {
+        latitude: driverLocation.coords.latitude,
+        longitude: driverLocation.coords.longitude,
+        latitudeDelta: 0.015,
+        longitudeDelta: 0.015,
+      },
+      800
+    );
+  };
+
+  const handleLogout = () => router.push("/");
+
+  // TELA DE LOADING
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#0066CC" />
+        <ActivityIndicator size="large" color="#FCA14E" />
         <Text style={styles.loadingText}>Carregando entrega...</Text>
       </View>
     );
   }
 
-  // ERRO
+  // TELA DE ERRO
   if (error || !selectedDelivery) {
     return (
       <View style={styles.errorContainer}>
@@ -304,16 +329,15 @@ export default function MapScreen() {
             longitudeDelta: 0.1,
           }}
         >
-          {/* DESTINO */}
+          {/* MARCADOR DO DESTINO */}
           <Marker
-            key={`delivery-${selectedDelivery.id}`}
             coordinate={{
               latitude: selectedDelivery.latitude,
               longitude: selectedDelivery.longitude,
             }}
             title="Destino da Entrega"
             description={selectedDelivery.addressStreet}
-            onPress={() => handleDeliveryPress(selectedDelivery)}
+            onPress={goToDelivery}
           >
             <Svg width={40} height={40} viewBox="0 0 66 100" fill="none">
               <Path
@@ -331,17 +355,16 @@ export default function MapScreen() {
             </Svg>
           </Marker>
 
-          {/* MOTORISTA */}
+          {/* MARCADOR DO MOTORISTA */}
           {driverLocation && (
             <Marker
-              key="driver"
               coordinate={{
                 latitude: driverLocation.coords.latitude,
                 longitude: driverLocation.coords.longitude,
               }}
               title="Motorista"
-              description="Atualizado agora"
-              onPress={() => handleDeliveryPress(selectedDelivery)}
+              description="Posição atual do motorista"
+              onPress={goToDriver}
             >
               <Image
                 source={require("../../assets/animations/truck.gif")}
@@ -356,10 +379,10 @@ export default function MapScreen() {
       {/* HEADER */}
       <AppHeader logoSource={appLogo} onLogout={handleLogout} />
 
-      {/* PAINEL */}
+      {/* PAINEL INFERIOR */}
       <View style={styles.panelContainer}>
-        {selectedDelivery.status === "Pendente" ? (
-          <DeliveryNotStarted
+        {selectedDelivery.status === "Entregue" ? (
+          <DeliveryDelivered
             clientName={selectedDelivery.client}
             street={selectedDelivery.addressStreet}
             neighborhoodAndCity={selectedDelivery.addressCity}
@@ -370,6 +393,27 @@ export default function MapScreen() {
           />
         ) : selectedDelivery.status === "Em rota" ? (
           <DeliveryInRoute
+            clientName={selectedDelivery.client}
+            street={selectedDelivery.addressStreet}
+            neighborhoodAndCity={selectedDelivery.addressCity}
+            phone={selectedDelivery.phone}
+            orderNumber={selectedDelivery.orderNumber}
+            status={selectedDelivery.status}
+            driverName="Motorista"
+          />
+        ) : selectedDelivery.status === "Não entregue" ? (
+          <DeliveryNotDelivered
+            clientName={selectedDelivery.client}
+            street={selectedDelivery.addressStreet}
+            neighborhoodAndCity={selectedDelivery.addressCity}
+            phone={selectedDelivery.phone}
+            orderNumber={selectedDelivery.orderNumber}
+            status={selectedDelivery.status}
+            motivo={selectedDelivery.motivo}
+            driverName="Motorista"
+          />
+        ) : selectedDelivery.status === "Cancelada" ? (
+          <DeliveryCanceled
             clientName={selectedDelivery.client}
             street={selectedDelivery.addressStreet}
             neighborhoodAndCity={selectedDelivery.addressCity}
@@ -394,7 +438,6 @@ export default function MapScreen() {
   );
 }
 
-// ESTILOS
 const styles = StyleSheet.create({
   container: { flex: 1 },
   mapContainer: { flex: 1 },
