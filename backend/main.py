@@ -36,7 +36,7 @@ babel = Babel(app)
 limiter = Limiter(
     app=app,
     key_func=get_remote_address,
-    default_limits=["100 per hour"]
+    default_limits=["200 per hour"]
 )
 migrate = Migrate(app, db)
 
