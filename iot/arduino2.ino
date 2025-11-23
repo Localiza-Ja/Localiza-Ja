@@ -12,7 +12,7 @@ const char* ssid = "123";
 const char* password = "çççççççç";
 
 const char* motoristaId = "a1b2c3d4-e5f6-7890-1234-567890abcdef";
-const char* entregaId = "f0e9d8c7-b6a5-4321-fedc-ba9876543210";
+const char* entregaId   = "f0e9d8c7-b6a5-4321-fedc-ba9876543210";
 
 const char* BACKEND_IP = "10.75.10.144";
 const uint16_t BACKEND_PORT = 5000;
@@ -20,78 +20,91 @@ const char* ENDPOINT_PATH = "/localizacoes/iot";
 
 // --- 2. CONFIGURAÇÃO DO GPS ---
 TinyGPSPlus gps;
-HardwareSerial SerialGPS(1);
+HardwareSerial SerialGPS(1); 
 #define RXD2 16
 #define TXD2 17
 
+// Última localização válida armazenada
+float lastLat = 0.0;
+float lastLon = 0.0;
+bool hasLastFix = false;
+
 // --- 3. FUNÇÕES AUXILIARES ---
 String backendUrl() {
-  return String("http://") + BACKEND_IP + ":" + String(BACKEND_PORT) + String(ENDPOINT_PATH);
+  return String("http://") + BACKEND_IP + ":" + String(BACKEND_PORT) + ENDPOINT_PATH;
 }
 
-// Retorna qualquer coordenada válida, mesmo sem fix
+// Captura coordenadas **de qualquer forma possível**
 bool getGpsCoordinates(float &lat, float &lon) {
   while (SerialGPS.available() > 0) {
     gps.encode(SerialGPS.read());
   }
 
-  // Se houver nova localização, usa ela
+  // Caso tenha atualização recente
   if (gps.location.isUpdated()) {
     lat = gps.location.lat();
     lon = gps.location.lng();
+    lastLat = lat;
+    lastLon = lon;
+    hasLastFix = true;
     return true;
   }
 
-  // Se não houver nova, mas já existe alguma anterior válida, também envia
+  // Sem fix novo, mas há última posição válida → fornecer
   if (gps.location.isValid()) {
     lat = gps.location.lat();
     lon = gps.location.lng();
+    lastLat = lat;
+    lastLon = lon;
+    hasLastFix = true;
     return true;
   }
 
-  // Nenhuma coordenada legível
+  // Nenhuma posição atual, mas havia uma antiga → enviar mesmo assim
+  if (hasLastFix) {
+    lat = lastLat;
+    lon = lastLon;
+    return true;
+  }
+
   return false;
 }
 
-// Gera timestamp GPS ou local
+// Formatação do horário
 String getFormattedTime() {
   if (gps.date.isValid() && gps.time.isValid()) {
     char buffer[25];
-    snprintf(buffer, sizeof(buffer), "%04d-%02d-%02d %02d:%02d:%02d",
-             gps.date.year(),
-             gps.date.month(),
-             gps.date.day(),
-             gps.time.hour(),
-             gps.time.minute(),
-             gps.time.second());
-    return String(buffer);
-  } else {
-    struct tm timeinfo;
-    if (!getLocalTime(&timeinfo)) return "0000-00-00 00:00:00";
-    char buffer[25];
-    strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", &timeinfo);
-    return String(buffer);
+    snprintf(buffer, sizeof(buffer),
+      "%04d-%02d-%02d %02d:%02d:%02d",
+      gps.date.year(), gps.date.month(), gps.date.day(),
+      gps.time.hour(), gps.time.minute(), gps.time.second());
+    return buffer;
   }
+
+  struct tm timeinfo;
+  if (!getLocalTime(&timeinfo)) return "0000-00-00 00:00:00";
+
+  char buffer[25];
+  strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", &timeinfo);
+  return buffer;
 }
 
 // --- 4. ENVIO DE DADOS ---
 void sendLocation() {
   if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("⚠️ WiFi não conectado — pulando envio.");
+    Serial.println("⚠️ WiFi não conectado — envio ignorado.");
     return;
   }
 
   float lat, lon;
-  bool gotCoords = getGpsCoordinates(lat, lon);
+  bool got = getGpsCoordinates(lat, lon);
 
-  if (!gotCoords) {
-    Serial.println("❌ Nenhuma coordenada válida disponível.");
+  if (!got) {
+    Serial.println("❌ Nenhuma posição disponível (nem última posição).");
     return;
   }
 
   String timestamp = getFormattedTime();
-  String url = backendUrl();
-  Serial.printf("📡 Enviando para %s\n", url.c_str());
 
   StaticJsonDocument<400> doc;
   doc["entrega_id"] = entregaId;
@@ -102,19 +115,21 @@ void sendLocation() {
 
   String payload;
   serializeJson(doc, payload);
-  Serial.println("Payload:");
-  Serial.println(payload);
+
+  Serial.printf("⬆️ Enviando: %s\n", payload.c_str());
 
   HTTPClient http;
-  http.begin(url);
+  http.begin(backendUrl());
   http.addHeader("Content-Type", "application/json");
 
   int code = http.POST(payload);
+
   if (code > 0) {
-    Serial.printf("Resposta HTTP %d: %s\n", code, http.getString().c_str());
+    Serial.printf("📡 HTTP %d: %s\n", code, http.getString().c_str());
   } else {
-    Serial.printf("Erro HTTP: %s\n", http.errorToString(code).c_str());
+    Serial.printf("❌ Erro HTTP: %s\n", http.errorToString(code).c_str());
   }
+
   http.end();
 }
 
@@ -122,40 +137,36 @@ void sendLocation() {
 void setup() {
   Serial.begin(SERIAL_BAUD);
   delay(1000);
-  Serial.println("\nInicializando ESP32 com GPS...");
+  Serial.println("\nInicializando ESP32 + GPS...");
 
   SerialGPS.begin(9600, SERIAL_8N1, RXD2, TXD2);
-  Serial.println("GPS iniciado em 9600 baud.");
-  delay(2000);
+  delay(1500);
 
-  // Teste inicial de comunicação
-  Serial.println("Verificando comunicação com o GPS...");
+  // Teste inicial NMEA
+  Serial.println("Testando comunicação do GPS...");
   unsigned long start = millis();
   bool ok = false;
-  while (millis() - start < 5000) {
+
+  while (millis() - start < 3000) {
     if (SerialGPS.available()) {
-      char c = SerialGPS.read();
-      Serial.write(c);
+      Serial.write(SerialGPS.read());
       ok = true;
     }
   }
-  if (ok) Serial.println("\n✅ GPS enviando dados NMEA!");
-  else Serial.println("\n⚠️ Nenhum dado recebido. Verifique conexões ou baud rate.");
 
-  // WiFi
+  Serial.println(ok ? "\n✅ GPS enviando NMEA!" : "\n⚠️ Nenhum dado recebido!");
+
+  // Conexão WiFi
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, password);
   Serial.print("Conectando ao WiFi");
-  unsigned long t0 = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - t0 < 20000) {
+  while (WiFi.status() != WL_CONNECTED) {
     Serial.print(".");
-    delay(500);
+    delay(300);
   }
-  Serial.println(WiFi.status() == WL_CONNECTED ? "\n✅ WiFi conectado!" : "\n❌ Falha ao conectar no WiFi.");
-  if (WiFi.status() == WL_CONNECTED) {
-    Serial.print("IP: ");
-    Serial.println(WiFi.localIP());
-  }
+  Serial.println("\n✔️ WiFi conectado!");
+  Serial.print("IP: ");
+  Serial.println(WiFi.localIP());
 
   configTime(-3 * 3600, 0, "pool.ntp.org");
 }
@@ -166,21 +177,21 @@ void loop() {
     gps.encode(SerialGPS.read());
   }
 
+  // Logs no monitor serial
   if (gps.location.isValid()) {
-    Serial.printf("📍 Lat: %.6f | Lon: %.6f | Satélites: %d\n",
-                  gps.location.lat(),
-                  gps.location.lng(),
-                  gps.satellites.value());
+    Serial.printf("📍 Lat: %.6f | Lon: %.6f | Sat: %d\n",
+      gps.location.lat(), gps.location.lng(), gps.satellites.value());
   } else {
-    Serial.println("🔎 Nenhum fix ainda...");
+    Serial.println("🔎 GPS sem fix ainda...");
   }
 
   static unsigned long lastSend = 0;
-  const unsigned long interval = 15000; // 15s
-  if (millis() - lastSend > interval) {
+  const unsigned long sendInterval = 2000;  // ⏱️ Envia a cada 2s
+
+  if (millis() - lastSend >= sendInterval) {
     sendLocation();
     lastSend = millis();
   }
 
-  delay(2000);
+  delay(200);
 }
