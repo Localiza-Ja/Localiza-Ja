@@ -22,6 +22,7 @@ import {
 import { useSimulationController } from "./useSimulationController";
 import { useWrongRoute } from "./useWrongRoute";
 import { useRecalculatedCorrectRoute } from "./useRecalculatedCorrectRoute";
+import { useIotLocation } from "./useIotLocation";
 
 // === Configuração de tema (igual ao monolito) ===
 const MAP_THEME_MODE = "autoSun";
@@ -63,6 +64,9 @@ export function useMapScreen() {
   const [sheetIndex, setSheetIndex] = useState(1); // índice do BottomSheet (10%, 60%, 95%)
   const [sheetTargetIndex, setSheetTargetIndex] = useState<number | null>(null);
 
+  // 🔹 NOVO: controle para ligar/desligar IoT (depois vamos ligar isso no SimulationFab)
+  const [iotActive, setIotActive] = useState(false);
+
   // --- BLOCO: estado de alto nível da SIMULAÇÃO (independente do mapa) ---
   const simulation = useSimulationController();
 
@@ -75,8 +79,52 @@ export function useMapScreen() {
     handleLogout,
   } = useInitialMapData();
 
-  // Localização em tempo real e trilha já percorrida.
+  // Localização em tempo real e trilha já percorrida (CELULAR)
   const { driverLocation, pastCoordinates } = useDriverLocation();
+
+  // 🔹 NOVO: Localização vindo do IoT (sem alterar nada do hook de cima)
+  const {
+    iotLocation,
+    hasData: iotHasData,
+    error: iotError,
+  } = useIotLocation(motorista?.id ?? null, iotActive);
+
+  // 🔹 NOVO: localização real "base" para quando a simulação estiver DESLIGADA
+  // Regra:
+  // - iotActive true + iotHasData → usa IoT
+  // - iotActive true + !iotHasData → null (sem fallback pra celular)
+  // - iotActive false → usa celular (driverLocation), igual antes
+  const realLocation: LocationObject | null = useMemo(() => {
+    if (iotActive) {
+      if (iotHasData && iotLocation) {
+        return iotLocation;
+      }
+      return null; // IoT ligado mas sem dados → queremos ver o erro
+    }
+    return (driverLocation as LocationObject | null) ?? null;
+  }, [iotActive, iotHasData, iotLocation, driverLocation]);
+
+  // 🔹 NOVO: toast 1x quando IoT está ativo e sem dados
+  const iotWarningShownRef = useRef(false);
+  useEffect(() => {
+    if (!iotActive) {
+      iotWarningShownRef.current = false;
+      return;
+    }
+
+    if (!iotHasData) {
+      if (!iotWarningShownRef.current) {
+        iotWarningShownRef.current = true;
+        showToast({
+          type: "warning",
+          title: "Sem dados do IoT",
+          message: iotError || "Nenhuma localização recebida do IoT.",
+        } as const);
+      }
+    } else {
+      iotWarningShownRef.current = false;
+    }
+  }, [iotActive, iotHasData, iotError, showToast]);
 
   // 🔒 Localização congelada para calcular a rota durante a simulação
   const [driverLocationFrozenForRoute, setDriverLocationFrozenForRoute] =
@@ -179,12 +227,14 @@ export function useMapScreen() {
   // Localização base:
   // - Se simulação estiver ligada:
   //    - usa posição em movimento OU congelada do simulador
-  //    - fallback para driverLocation se não tiver nenhuma
+  //    - fallback para realLocation (que já decidiu IoT vs celular)
   // - Se simulação estiver desligada:
-  //    - usa sempre driverLocation (GPS/IoT)
+  //    - usa sempre realLocation
   const baseLocation = simulation.isEnabled
-    ? simulatedLocation ?? frozenSimLocation ?? driverLocation
-    : driverLocation;
+    ? simulatedLocation ?? frozenSimLocation ?? realLocation
+    : realLocation;
+
+  const effectiveLocation = baseLocation ?? null;
 
   // Rota CORRETA recalculada de forma leve ENQUANTO estiver errando,
   // usando a posição do simulador (ou a real, se não tiver simulador ainda).
@@ -225,9 +275,6 @@ export function useMapScreen() {
     savedCorrectPathAfterError,
     routeCoordinates,
   ]);
-
-  // Localização efetiva (não aplicamos offset perpendicular).
-  const effectiveLocation = baseLocation ?? driverLocation ?? null;
 
   // Atualiza câmera conforme modo de navegação/posicionamento (igual ao monolito)
   useEffect(() => {
@@ -418,7 +465,7 @@ export function useMapScreen() {
         title: "Erro ao atualizar",
         message:
           "Não foi possível atualizar o status. Tente novamente em instantes.",
-      });
+      } as const);
     }
   }
 
@@ -512,6 +559,34 @@ export function useMapScreen() {
     return isNightByClock();
   }, []);
 
+  // --- THEME TOGGLE (DIA / NOITE) ---
+  /**
+   * Override manual:
+   * - null = segue regra automática (horário)
+   * - true/false = modo manual
+   */
+  const [manualThemeOverride, setManualThemeOverride] = useState<
+    boolean | null
+  >(null);
+
+  // Se existir override, ele manda. Se não existir, usa o tema automático original.
+  const finalNightTheme = manualThemeOverride ?? isNightTheme;
+
+  /**
+   * Alterna entre dia/noite
+   *
+   * Se nunca tocou no botão:
+   *   - primeiro toque ativa override invertendo o tema base atual.
+   * Se já usou override:
+   *   - simplesmente inverte.
+   */
+  const handleToggleTheme = () => {
+    setManualThemeOverride((prev) => {
+      if (prev === null) return !isNightTheme; // primeira vez
+      return !prev; // alterna normalmente
+    });
+  };
+
   return {
     mapRef,
 
@@ -542,8 +617,12 @@ export function useMapScreen() {
     handleSimulationStop,
     handleToggleWrongRoute,
 
+    iotActive,
+    setIotActive,
+
     initialRegion: initialRegionConst,
-    isNightTheme,
+    isNightTheme: finalNightTheme, // <-- troca aqui pelo finalNightTheme
+    handleToggleTheme,
 
     // 🔥 novo para o map.tsx separado, mas lógica igual ao monolito
     handleRegionChangeComplete,

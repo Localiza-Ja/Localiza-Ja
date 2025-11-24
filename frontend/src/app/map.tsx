@@ -28,8 +28,7 @@ import mapStyleDark from "../styles/mapStyleDark";
 import { Delivery } from "../types";
 import { useMapScreen } from "../hooks/useMapScreen";
 
-// Imagens do app (logo e seta do motorista).
-const appLogo = require("../../assets/images/lj-logo.png");
+// Imagem da seta do motorista.
 const navigationArrow = require("../../assets/images/navigation-arrow.png");
 
 // Estilos de rota desenhada no mapa.
@@ -82,6 +81,7 @@ function MapScreenInner() {
     handleToggleWrongRoute,
     initialRegion,
     isNightTheme,
+    handleToggleTheme,
     handleRegionChangeComplete,
     sheetTargetIndex,
     setSheetTargetIndex,
@@ -89,6 +89,9 @@ function MapScreenInner() {
 
   const isSheetCoveringMap =
     (sheetIndex ?? 1) >= 1 || (sheetTargetIndex ?? -1) >= 1;
+
+  // Controles do topo (logo/header + indicador + FAB de simulação)
+  const showTopControls = !isSheetCoveringMap;
 
   const centerIconName = isNavigating ? "navigation" : "compass";
 
@@ -189,9 +192,16 @@ function MapScreenInner() {
       {effectiveLocation &&
         isNavigating &&
         isMapCentered &&
-        !isSheetCoveringMap && <DriverIndicator />}
+        showTopControls && <DriverIndicator />}
 
-      <AppHeader logoSource={appLogo} onLogout={handleLogout} />
+      {/* Header (logo + menu tema/sair) */}
+      {showTopControls && (
+        <AppHeader
+          isNightTheme={isNightTheme}
+          onLogout={handleLogout}
+          onToggleTheme={handleToggleTheme}
+        />
+      )}
 
       {!isMapCentered && (
         <TouchableOpacity style={styles.centerButton} onPress={handleCenterMap}>
@@ -217,7 +227,7 @@ function MapScreenInner() {
         mode={simulation.mode}
         isPaused={simulation.isPaused}
         isWrongRoute={simulation.isWrongRoute}
-        visible={sheetIndex === 0}
+        visible={showTopControls}
         onStart={handleSimulationStart}
         onPause={simulation.pause}
         onResume={simulation.resume}

@@ -1,6 +1,5 @@
 // frontend/src/components/SimulationFab.tsx
 
-
 /**
  * Botão fixo no canto superior direito para controlar a simulação.
  *
@@ -144,6 +143,22 @@ const SimulationFab: React.FC<SimulationFabProps> = ({
     }
   }, [menuOpen, actions.length, itemAnims]);
 
+  // 🔧 se o FAB sumir da tela, fecha o menu e reseta animação
+  useEffect(() => {
+    if (!visible) {
+      setMenuOpen(false);
+      itemAnims.forEach((anim) => anim.setValue(0));
+    }
+  }, [visible, itemAnims]);
+
+  // 🔧 se o modo voltar para "off", fecha o menu e reseta animação
+  useEffect(() => {
+    if (mode === "off") {
+      setMenuOpen(false);
+      itemAnims.forEach((anim) => anim.setValue(0));
+    }
+  }, [mode, itemAnims]);
+
   if (!visible) {
     return null;
   }
@@ -255,7 +270,7 @@ const styles = StyleSheet.create({
   // canto superior direito
   container: {
     position: "absolute",
-    top: 80,
+    top: 88,
     right: 16,
     zIndex: 120,
     width: "100%",
