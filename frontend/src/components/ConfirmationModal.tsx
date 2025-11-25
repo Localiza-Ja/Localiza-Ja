@@ -18,6 +18,7 @@ import { Feather } from "@expo/vector-icons";
 import {
   pickFromCameraDataUrl,
   pickFromLibraryDataUrl,
+  // pickProofPhotoBase64 (se quiser usar depois, já está importado no utils)
 } from "../utils/pickProofPhotoBase64";
 import { useCustomAlert } from "./CustomAlert";
 
@@ -50,7 +51,7 @@ export default function ConfirmationModal({
 
   // Tira foto pela câmera.
   const openCamera = async () => {
-    const picked = await pickFromCameraDataUrl();
+    const picked = await pickFromCameraDataUrl(showAlert);
     if (picked) {
       setPhotoUri(picked.uri);
       setPhotoDataUrl(picked.dataUrl);
@@ -59,7 +60,7 @@ export default function ConfirmationModal({
 
   // Escolhe foto da galeria.
   const openGallery = async () => {
-    const picked = await pickFromLibraryDataUrl();
+    const picked = await pickFromLibraryDataUrl(showAlert);
     if (picked) {
       setPhotoUri(picked.uri);
       setPhotoDataUrl(picked.dataUrl);

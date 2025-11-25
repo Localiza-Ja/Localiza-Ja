@@ -1,7 +1,23 @@
 // frontend/src/utils/pickProofPhotoBase64.ts
 
 import * as ImagePicker from "expo-image-picker";
-import { useCustomAlert } from "../components/CustomAlert";
+
+// Tipo de função de alerta usada pelo CustomAlert (recebida de fora, não é hook aqui).
+type ProofAlertButton = {
+  text: string;
+  variant?: "primary" | "ghost";
+  onPress?: () => void;
+};
+
+type ShowAlertOptions = {
+  title: string;
+  message: string;
+  type?: "info" | "warning" | "success" | "error";
+  buttons?: ProofAlertButton[];
+};
+
+// Aqui deixamos o tipo mais genérico para ser compatível com AlertOptions do CustomAlert
+type ShowAlertFn = (options: any) => void;
 
 /**
  * Usa ImagePicker.MediaType (SDKs novos) ou MediaTypeOptions (SDKs antigos) sem quebrar.
@@ -29,22 +45,11 @@ function toDataUrl(base64?: string | null, uri?: string | null) {
   return `data:image/${ext};base64,${base64}`;
 }
 
-/**
- * HOOK WRAPPER para permitir uso do showAlert dentro das funções assíncronas.
- * Assim não precisa transformar essas funções em hooks.
- */
-function useAlertWrapper() {
-  const { showAlert } = useCustomAlert();
-  return showAlert;
-}
-
 /** CÂMERA → { dataUrl, uri } (ou null) */
-export async function pickFromCameraDataUrl(): Promise<{
+export async function pickFromCameraDataUrl(showAlert: ShowAlertFn): Promise<{
   dataUrl: string;
   uri: string;
 } | null> {
-  const showAlert = useAlertWrapper();
-
   const { status } = await ImagePicker.requestCameraPermissionsAsync();
   if (status !== "granted") {
     showAlert({
@@ -73,12 +78,10 @@ export async function pickFromCameraDataUrl(): Promise<{
 }
 
 /** GALERIA → { dataUrl, uri } (ou null) */
-export async function pickFromLibraryDataUrl(): Promise<{
+export async function pickFromLibraryDataUrl(showAlert: ShowAlertFn): Promise<{
   dataUrl: string;
   uri: string;
 } | null> {
-  const showAlert = useAlertWrapper();
-
   const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
   if (status !== "granted") {
     showAlert({
@@ -107,12 +110,10 @@ export async function pickFromLibraryDataUrl(): Promise<{
 }
 
 /** Prompt: Câmera ou Galeria? → { dataUrl, uri } (ou null) */
-export async function pickProofPhotoDataUrl(): Promise<{
+export async function pickProofPhotoDataUrl(showAlert: ShowAlertFn): Promise<{
   dataUrl: string;
   uri: string;
 } | null> {
-  const showAlert = useAlertWrapper();
-
   // Usamos uma PROMISE manual para capturar qual opção o usuário clicou
   return new Promise((resolve) => {
     showAlert({
@@ -123,12 +124,12 @@ export async function pickProofPhotoDataUrl(): Promise<{
         {
           text: "Câmera",
           variant: "primary",
-          onPress: async () => resolve(await pickFromCameraDataUrl()),
+          onPress: async () => resolve(await pickFromCameraDataUrl(showAlert)),
         },
         {
           text: "Galeria",
           variant: "primary",
-          onPress: async () => resolve(await pickFromLibraryDataUrl()),
+          onPress: async () => resolve(await pickFromLibraryDataUrl(showAlert)),
         },
         {
           text: "Cancelar",
@@ -146,18 +147,24 @@ export async function pickProofPhotoDataUrl(): Promise<{
  */
 
 /** Antes alguns lugares esperavam string base64 — agora retornamos a DATA URL (string) */
-export async function pickFromCameraBase64(): Promise<string | null> {
-  const r = await pickFromCameraDataUrl();
+export async function pickFromCameraBase64(
+  showAlert: ShowAlertFn
+): Promise<string | null> {
+  const r = await pickFromCameraDataUrl(showAlert);
   return r?.dataUrl ?? null; // data URL string: "data:image/...;base64,..."
 }
 
-export async function pickFromGalleryBase64(): Promise<string | null> {
-  const r = await pickFromLibraryDataUrl();
+export async function pickFromGalleryBase64(
+  showAlert: ShowAlertFn
+): Promise<string | null> {
+  const r = await pickFromLibraryDataUrl(showAlert);
   return r?.dataUrl ?? null; // data URL string
 }
 
 /** Este é o nome que seus arquivos já importavam */
-export async function pickProofPhotoBase64(): Promise<string | null> {
-  const r = await pickProofPhotoDataUrl();
+export async function pickProofPhotoBase64(
+  showAlert: ShowAlertFn
+): Promise<string | null> {
+  const r = await pickProofPhotoDataUrl(showAlert);
   return r?.dataUrl ?? null; // data URL string
 }

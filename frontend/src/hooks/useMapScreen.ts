@@ -288,7 +288,7 @@ export function useMapScreen() {
         pitch: 0, // 2D sempre
         zoom: isNavigating ? currentZoom : 16,
       };
-      mapRef.current.animateCamera(cameraSettings, { duration: 400 });
+      mapRef.current.animateCamera(cameraSettings, { duration: 550 });
     }
   }, [isNavigating, effectiveLocation, isMapCentered]);
 
