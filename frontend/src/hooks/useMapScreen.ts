@@ -1,6 +1,5 @@
 // src/hooks/useMapScreen.ts
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { Alert, useColorScheme } from "react-native";
 import MapView, { LatLng } from "react-native-maps";
 import type { LocationObject } from "expo-location";
 
@@ -12,6 +11,7 @@ import {
 } from "../services/api";
 
 import { useToast } from "../components/Toast";
+import { useCustomAlert } from "../components/CustomAlert";
 import { useInitialMapData } from "./useInitialMapData";
 import { useDriverLocation } from "./useDriverLocation";
 import { useRouteToDelivery } from "./useRouteToDelivery";
@@ -52,8 +52,8 @@ const initialRegionConst = {
 
 export function useMapScreen() {
   const mapRef = useRef<MapView>(null);
-  const colorScheme = useColorScheme();
   const { showToast } = useToast();
+  const { showAlert } = useCustomAlert();
 
   // --- Estado da UI da tela (igual ao monólito) ---
   const [selectedDelivery, setSelectedDelivery] = useState<Delivery | null>(
@@ -395,10 +395,12 @@ export function useMapScreen() {
           (d) => d.status === "em_rota" && d.id !== deliveryId
         );
         if (outraEmRota) {
-          Alert.alert(
-            "Entrega em andamento",
-            "Você já possui uma entrega em rota. Finalize ou cancele antes de iniciar outra."
-          );
+          showAlert({
+            title: "Entrega em andamento",
+            message:
+              "Você já possui uma entrega em rota. Finalize ou cancele antes de iniciar outra.",
+            type: "warning",
+          });
           return;
         }
       }
@@ -505,10 +507,11 @@ export function useMapScreen() {
   const handleToggleWrongRoute = useCallback(() => {
     // Não deixa errar se a simulação não estiver ligada
     if (!simulation.isEnabled) {
-      Alert.alert(
-        "Simulação",
-        "Para errar o caminho, primeiro inicie a simulação."
-      );
+      showAlert({
+        title: "Simulação",
+        message: "Para errar o caminho, primeiro inicie a simulação.",
+        type: "info",
+      });
       return;
     }
 
@@ -540,6 +543,7 @@ export function useMapScreen() {
     simulatedLocation,
     frozenSimLocation,
     driverLocation?.coords,
+    showAlert,
   ]);
 
   // Handler para onRegionChangeComplete (IDÊNTICO ao monolito)

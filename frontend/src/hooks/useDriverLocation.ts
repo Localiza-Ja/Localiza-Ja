@@ -8,8 +8,8 @@
  */
 
 import { useEffect, useState } from "react";
-import { Alert } from "react-native";
 import * as Location from "expo-location";
+import { useCustomAlert } from "../components/CustomAlert";
 
 export function useDriverLocation() {
   const [driverLocation, setDriverLocation] =
@@ -18,6 +18,8 @@ export function useDriverLocation() {
     Location.LocationObject["coords"][]
   >([]);
 
+  const { showAlert } = useCustomAlert();
+
   useEffect(() => {
     let subscription: Location.LocationSubscription | null = null;
 
@@ -25,10 +27,11 @@ export function useDriverLocation() {
       let { status: foregroundStatus } =
         await Location.requestForegroundPermissionsAsync();
       if (foregroundStatus !== "granted") {
-        Alert.alert(
-          "Permissão Negada",
-          "A permissão de localização é necessária."
-        );
+        showAlert({
+          title: "Permissão negada",
+          message: "A permissão de localização é necessária.",
+          type: "warning",
+        });
         return;
       }
 
@@ -58,7 +61,7 @@ export function useDriverLocation() {
         subscription.remove();
       }
     };
-  }, []);
+  }, [showAlert]);
 
   return {
     driverLocation,

@@ -14,7 +14,7 @@ import { Feather } from "@expo/vector-icons";
 
 type AppHeaderProps = {
   logoSource?: any;
-  isNightTheme: boolean;
+  isNightTheme?: boolean;
   onLogout?: () => void;
   onToggleTheme?: () => void;
   variant?: "circle" | "pill";

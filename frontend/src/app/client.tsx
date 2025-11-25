@@ -1,12 +1,5 @@
 import { router, useLocalSearchParams } from "expo-router";
-import {
-  View,
-  StyleSheet,
-  Text,
-  ActivityIndicator,
-  Alert,
-  Image,
-} from "react-native";
+import { View, StyleSheet, Text, ActivityIndicator, Image } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import MapView, { Marker } from "react-native-maps";
 import React, { useRef, useState, useEffect } from "react";
@@ -18,6 +11,7 @@ import DeliveryDelivered from "../components/DeliveryDelivered";
 import DeliveryNotDelivered from "../components/DeliveryNotDelivered";
 import DeliveryCanceled from "../components/DeliveryCanceled";
 import { Svg, Path } from "react-native-svg";
+import { useCustomAlert } from "../components/CustomAlert";
 
 const appLogo = require("../../assets/images/lj-logo.png");
 
@@ -123,6 +117,8 @@ export default function MapScreen() {
   const [error, setError] = useState<string | null>(null);
   const [motoristaId, setMotoristaId] = useState<string | null>(null);
 
+  const { showAlert } = useCustomAlert();
+
   // 1. CARREGAR ENTREGA
   useEffect(() => {
     const fetchDelivery = async () => {
@@ -146,10 +142,11 @@ export default function MapScreen() {
         if (geoResult) {
           deliveryCoords = geoResult;
         } else {
-          Alert.alert(
-            "Aviso",
-            "Endereço não localizado. Usando posição aproximada."
-          );
+          showAlert({
+            title: "Aviso",
+            message: "Endereço não localizado. Usando posição aproximada.",
+            type: "warning",
+          });
         }
 
         const statusMap: Record<string, string> = {
@@ -193,14 +190,18 @@ export default function MapScreen() {
       } catch (err: any) {
         const msg = err.response?.data?.error || "Erro ao carregar entrega.";
         setError(msg);
-        Alert.alert("Erro", msg);
+        showAlert({
+          title: "Erro",
+          message: msg,
+          type: "danger",
+        });
       } finally {
         setIsLoading(false);
       }
     };
 
     fetchDelivery();
-  }, [params.pedido]);
+  }, [params.pedido, showAlert]);
 
   // 2. ATUALIZAR POSIÇÃO DO MOTORISTA + ZOOM AUTOMÁTICO NO MOTORISTA
   useEffect(() => {
@@ -254,7 +255,7 @@ export default function MapScreen() {
     // Atualiza imediatamente
     updateDriverLocation();
 
-    // Atualiza a cada 5 minutos
+    // Atualiza a cada 2 minutos
     const interval = setInterval(updateDriverLocation, 2 * 60 * 1000);
 
     return () => clearInterval(interval);

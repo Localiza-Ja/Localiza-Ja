@@ -1,12 +1,13 @@
 // frontend/src/components/DeliveryPanel.tsx
 
 import React, { useMemo, useRef, useState } from "react";
-import { StyleSheet, View, Alert, Text } from "react-native";
+import { StyleSheet, View, Text } from "react-native";
 import BottomSheet from "@gorhom/bottom-sheet";
 import DeliveriesList from "./DeliveriesList";
 import { Delivery } from "../types";
 import { EntregaStatus, AtualizarStatusDetails } from "../services/api";
 import { pickProofPhotoBase64 } from "../utils/pickProofPhotoBase64";
+import { useCustomAlert } from "./CustomAlert";
 
 type DeliveryPanelProps = {
   deliveriesData: Delivery[];
@@ -47,6 +48,8 @@ export default function DeliveryPanel({
   const [activeSnapIndex, setActiveSnapIndex] = useState(1);
   const snapPoints = useMemo(() => ["10%", "60%", "95%"], []);
 
+  const { showAlert } = useCustomAlert();
+
   const handleItemClick = (delivery: Delivery) => {
     onDeliveryPress(delivery);
     if (activeSnapIndex === 0 && selectedDelivery?.id !== delivery.id) {
@@ -77,10 +80,11 @@ export default function DeliveryPanel({
         if (!temFoto) {
           const foto_prova = await pickProofPhotoBase64();
           if (!foto_prova) {
-            Alert.alert(
-              "Foto obrigatória",
-              "É necessário anexar a foto de comprovação."
-            );
+            showAlert({
+              title: "Foto obrigatória",
+              message: "É necessário anexar a foto de comprovação.",
+              type: "warning",
+            });
             return;
           }
           details = {
@@ -92,6 +96,7 @@ export default function DeliveryPanel({
 
       await onUpdateStatus(deliveryId, newStatus, details);
     } catch {
+      // silencioso por enquanto
     }
   };
 

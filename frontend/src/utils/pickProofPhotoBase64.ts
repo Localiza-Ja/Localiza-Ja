@@ -1,7 +1,7 @@
 // frontend/src/utils/pickProofPhotoBase64.ts
 
 import * as ImagePicker from "expo-image-picker";
-import { Alert } from "react-native";
+import { useCustomAlert } from "../components/CustomAlert";
 
 /**
  * Usa ImagePicker.MediaType (SDKs novos) ou MediaTypeOptions (SDKs antigos) sem quebrar.
@@ -29,17 +29,29 @@ function toDataUrl(base64?: string | null, uri?: string | null) {
   return `data:image/${ext};base64,${base64}`;
 }
 
+/**
+ * HOOK WRAPPER para permitir uso do showAlert dentro das funções assíncronas.
+ * Assim não precisa transformar essas funções em hooks.
+ */
+function useAlertWrapper() {
+  const { showAlert } = useCustomAlert();
+  return showAlert;
+}
+
 /** CÂMERA → { dataUrl, uri } (ou null) */
 export async function pickFromCameraDataUrl(): Promise<{
   dataUrl: string;
   uri: string;
 } | null> {
+  const showAlert = useAlertWrapper();
+
   const { status } = await ImagePicker.requestCameraPermissionsAsync();
   if (status !== "granted") {
-    Alert.alert(
-      "Permissão negada",
-      "Permita acesso à câmera para tirar a foto."
-    );
+    showAlert({
+      title: "Permissão negada",
+      message: "Permita acesso à câmera para tirar a foto.",
+      type: "warning",
+    });
     return null;
   }
 
@@ -65,12 +77,15 @@ export async function pickFromLibraryDataUrl(): Promise<{
   dataUrl: string;
   uri: string;
 } | null> {
+  const showAlert = useAlertWrapper();
+
   const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
   if (status !== "granted") {
-    Alert.alert(
-      "Permissão negada",
-      "Permita acesso à galeria para selecionar a foto."
-    );
+    showAlert({
+      title: "Permissão negada",
+      message: "Permita acesso à galeria para selecionar a foto.",
+      type: "warning",
+    });
     return null;
   }
 
@@ -96,29 +111,37 @@ export async function pickProofPhotoDataUrl(): Promise<{
   dataUrl: string;
   uri: string;
 } | null> {
+  const showAlert = useAlertWrapper();
+
+  // Usamos uma PROMISE manual para capturar qual opção o usuário clicou
   return new Promise((resolve) => {
-    Alert.alert(
-      "Escolher foto",
-      "Selecione a origem da foto de comprovação:",
-      [
+    showAlert({
+      title: "Escolher foto",
+      message: "Selecione a origem da foto de comprovação:",
+      type: "info",
+      buttons: [
         {
           text: "Câmera",
+          variant: "primary",
           onPress: async () => resolve(await pickFromCameraDataUrl()),
         },
         {
           text: "Galeria",
+          variant: "primary",
           onPress: async () => resolve(await pickFromLibraryDataUrl()),
         },
-        { text: "Cancelar", style: "cancel", onPress: () => resolve(null) },
+        {
+          text: "Cancelar",
+          variant: "ghost",
+          onPress: () => resolve(null),
+        },
       ],
-      { cancelable: true }
-    );
+    });
   });
 }
 
 /** =======================================
  *  EXPORTS DE COMPATIBILIDADE (LEGACY)
- *  Mantêm o NOME ANTIGO para não quebrar
  *  =======================================
  */
 

@@ -10,7 +10,6 @@
  */
 
 import { useEffect, useState } from "react";
-import { Alert } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
 import { Delivery } from "../types";
@@ -20,6 +19,7 @@ import {
   getEntregasPorMotorista,
 } from "../services/api";
 import { geocodeAddress } from "../utils/geocoding";
+import { useCustomAlert } from "../components/CustomAlert";
 
 const MIN_INITIAL_LOADING_MS = 1050;
 
@@ -35,6 +35,8 @@ export function useInitialMapData(): UseInitialMapDataReturn {
   const [motorista, setMotorista] = useState<any>(null);
   const [deliveriesData, setDeliveriesData] = useState<Delivery[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  const { showAlert } = useCustomAlert();
 
   // Faz logout e limpa token.
   const handleLogout = async (forceLogout = false) => {
@@ -78,9 +80,15 @@ export function useInitialMapData(): UseInitialMapDataReturn {
       } catch (error: any) {
         console.error(
           "Erro ao carregar dados:",
-          error.response?.data || error.message
+          error?.response?.data || error?.message
         );
-        Alert.alert("Sessão Expirada", "Faça login novamente.");
+
+        showAlert({
+          title: "Sessão Expirada",
+          message: "Faça login novamente.",
+          type: "warning",
+        });
+
         await handleLogout(true);
       } finally {
         const elapsed = Date.now() - startTime;

@@ -9,6 +9,8 @@ import { useFonts } from 'expo-font';
 import { useEffect } from "react";
 import { SplashScreen } from 'expo-router';
 
+import { CustomAlertProvider } from "../components/CustomAlert";
+
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
@@ -29,15 +31,13 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <Stack
-        screenOptions={{
-          headerShown: false,
-        }}
-      >
-        <Stack.Screen name="index" />
-        <Stack.Screen name="map" />
-        <Stack.Screen name="client" />
-      </Stack>
+      <CustomAlertProvider>
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="index" />
+          <Stack.Screen name="map" />
+          <Stack.Screen name="client" />
+        </Stack>
+      </CustomAlertProvider>
     </GestureHandlerRootView>
   );
 }

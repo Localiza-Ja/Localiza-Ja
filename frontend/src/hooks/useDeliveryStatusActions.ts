@@ -5,13 +5,11 @@
  * - Garante que apenas uma entrega possa estar "em rota" por vez.
  * - Controla o modal de confirmação e coleta de foto de prova de entrega.
  * - Expõe funções para iniciar, finalizar, cancelar e confirmar entregas.
- *
- * Este hook separa completamente a lógica de domínio da camada de UI,
- * tornando o componente `DeliveriesList` mais limpo e de fácil manutenção.
  */
 
 import { useState } from "react";
-import { Alert, GestureResponderEvent } from "react-native";
+import { GestureResponderEvent } from "react-native";
+import { useCustomAlert } from "../components/CustomAlert";
 import { Delivery } from "../types";
 import { EntregaStatus, AtualizarStatusDetails } from "../services/api";
 import { pickProofPhotoBase64 } from "../utils/pickProofPhotoBase64";
@@ -44,32 +42,48 @@ export const useDeliveryStatusActions = ({
     null
   );
 
+  // ALERT CUSTOM
+  const { showAlert } = useCustomAlert();
+
+  // -----------------------------------------------------------
+  // 1) INICIAR ENTREGA  — alert custom
+  // -----------------------------------------------------------
   const handleStart = (event: GestureResponderEvent, item: Delivery) => {
     const jaTemEmRota = data.some((d) => d.status === "em_rota");
     if (jaTemEmRota) {
-      Alert.alert(
-        "Entrega em andamento",
-        "Você já possui uma entrega em rota. Finalize ou cancele antes de iniciar outra."
-      );
+      showAlert({
+        title: "Entrega em andamento",
+        message:
+          "Você já possui uma entrega em rota. Finalize ou cancele antes de iniciar outra.",
+        type: "warning",
+      });
       return;
     }
 
-    Alert.alert(
-      "Iniciar Entrega",
-      `Tem certeza que deseja iniciar a entrega para "${item.nome_cliente}"?`,
-      [
-        { text: "Cancelar", style: "cancel" },
+    showAlert({
+      title: "Iniciar Entrega",
+      message: `Tem certeza que deseja iniciar a entrega para "${item.nome_cliente}"?`,
+      type: "info",
+      buttons: [
         {
-          text: "Sim, Iniciar",
+          text: "Cancelar",
+          variant: "ghost",
+        },
+        {
+          text: "Sim, iniciar",
+          variant: "primary",
           onPress: () => {
             onUpdateStatus(item.id, "em_rota", { kind: "em_rota" } as any);
             onStartNavigation();
           },
         },
-      ]
-    );
+      ],
+    });
   };
 
+  // -----------------------------------------------------------
+  // 2) FINALIZAR ENTREGA
+  // -----------------------------------------------------------
   const handleFinish = (event: GestureResponderEvent, item: Delivery) => {
     setDeliveryToConfirm(item);
     setIsModalVisible(true);
@@ -82,9 +96,14 @@ export const useDeliveryStatusActions = ({
 
     if (details.status === "entregue") {
       if (!details.nome_recebido?.trim()) {
-        Alert.alert("Atenção", "Informe o nome de quem recebeu.");
+        showAlert({
+          title: "Atenção",
+          message: "Informe o nome de quem recebeu.",
+          type: "warning",
+        });
         return;
       }
+
       let foto = details.foto_prova || (await askForPhotoBase64());
       if (!foto) return;
 
@@ -95,9 +114,14 @@ export const useDeliveryStatusActions = ({
       } as any);
     } else {
       if (!details.motivo?.trim()) {
-        Alert.alert("Atenção", "Informe o motivo da não entrega.");
+        showAlert({
+          title: "Atenção",
+          message: "Informe o motivo da não entrega.",
+          type: "warning",
+        });
         return;
       }
+
       let foto = details.foto_prova || (await askForPhotoBase64());
       if (!foto) return;
 
@@ -112,23 +136,30 @@ export const useDeliveryStatusActions = ({
     setDeliveryToConfirm(null);
   };
 
+  // -----------------------------------------------------------
+  // 3) CANCELAR ENTREGA — alert custom
+  // -----------------------------------------------------------
   const handleCancel = (event: GestureResponderEvent, item: Delivery) => {
-    Alert.alert(
-      "Cancelar Entrega",
-      `Tem certeza que deseja CANCELAR a entrega para "${item.nome_cliente}"?`,
-      [
-        { text: "Não", style: "cancel" },
+    showAlert({
+      title: "Cancelar Entrega",
+      message: `Tem certeza que deseja CANCELAR a entrega para "${item.nome_cliente}"?`,
+      type: "danger",
+      buttons: [
         {
-          text: "Sim, Cancelar",
-          style: "destructive",
+          text: "Não",
+          variant: "ghost",
+        },
+        {
+          text: "Sim, cancelar",
+          variant: "danger",
           onPress: () =>
             onUpdateStatus(item.id, "cancelada", {
               kind: "cancelada",
               motivo: "Cancelado pelo motorista",
             } as any),
         },
-      ]
-    );
+      ],
+    });
   };
 
   return {

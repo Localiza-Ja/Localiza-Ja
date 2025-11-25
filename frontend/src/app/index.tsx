@@ -10,7 +10,6 @@ import {
   ScrollView,
   Keyboard,
   StyleSheet,
-  Alert,
 } from "react-native";
 import Animated, {
   useSharedValue,
@@ -29,6 +28,7 @@ import { COLORS, SPACING } from "../styles/theme";
 import { UserType } from "../types";
 import { loginMotorista } from "../services/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useCustomAlert } from "../components/CustomAlert";
 
 const DEV_CNH = "11111111111";
 const DEV_PLACA = "JSP-0101";
@@ -50,6 +50,9 @@ export default function Login() {
   const placaInputRef = useRef<TextInput>(null);
   const dropdownRef = useRef<{ open: () => void }>(null);
   const keyboardAnimation = useSharedValue(0);
+
+  const { showAlert } = useCustomAlert();
+
   const buttonAnimatedStyle = useAnimatedStyle(() => {
     const BUTTON_SHIFT = 0;
     const translateY = interpolate(
@@ -138,7 +141,11 @@ export default function Login() {
 
     if (userType === "motorista") {
       if (!cnh || !placa) {
-        Alert.alert("Atenção", "Por favor, preencha os campos de CNH e Placa.");
+        showAlert({
+          title: "Atenção",
+          message: "Por favor, preencha os campos de CNH e Placa.",
+          type: "warning",
+        });
         return;
       }
 
@@ -157,11 +164,20 @@ export default function Login() {
         const errorMessage =
           error.response?.data?.error ||
           "Credenciais inválidas ou erro no servidor. Tente novamente.";
-        Alert.alert("Erro de Login", errorMessage);
+
+        showAlert({
+          title: "Erro de Login",
+          message: errorMessage,
+          type: "danger",
+        });
       }
     } else if (userType === "cliente") {
       if (!pedido || pedido.trim() === "") {
-        Alert.alert("Atenção", "Por favor, insira o número do pedido.");
+        showAlert({
+          title: "Atenção",
+          message: "Por favor, insira o número do pedido.",
+          type: "warning",
+        });
         return;
       }
 

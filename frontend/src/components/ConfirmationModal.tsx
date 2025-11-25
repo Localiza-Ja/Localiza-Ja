@@ -9,7 +9,6 @@ import {
   TouchableOpacity,
   Switch,
   Image,
-  Alert,
   ScrollView,
   StyleSheet,
   KeyboardAvoidingView,
@@ -20,6 +19,7 @@ import {
   pickFromCameraDataUrl,
   pickFromLibraryDataUrl,
 } from "../utils/pickProofPhotoBase64";
+import { useCustomAlert } from "./CustomAlert";
 
 type ConfirmationModalProps = {
   visible: boolean;
@@ -46,6 +46,8 @@ export default function ConfirmationModal({
   const [photoDataUrl, setPhotoDataUrl] = useState<string | null>(null);
   const [observations, setObservations] = useState("");
 
+  const { showAlert } = useCustomAlert();
+
   // Tira foto pela câmera.
   const openCamera = async () => {
     const picked = await pickFromCameraDataUrl();
@@ -68,14 +70,19 @@ export default function ConfirmationModal({
   const handleConfirm = () => {
     if (isSuccess) {
       if (!receiverName.trim()) {
-        Alert.alert(
-          "Campo obrigatório",
-          "O nome de quem recebeu é obrigatório."
-        );
+        showAlert({
+          title: "Campo obrigatório",
+          message: "O nome de quem recebeu é obrigatório.",
+          type: "warning",
+        });
         return;
       }
       if (!photoDataUrl) {
-        Alert.alert("Foto obrigatória", "Anexe a foto de comprovação.");
+        showAlert({
+          title: "Foto obrigatória",
+          message: "Anexe a foto de comprovação.",
+          type: "warning",
+        });
         return;
       }
       onConfirm({
@@ -87,14 +94,19 @@ export default function ConfirmationModal({
       });
     } else {
       if (!reason.trim()) {
-        Alert.alert(
-          "Campo obrigatório",
-          "O motivo é obrigatório quando a entrega não é realizada."
-        );
+        showAlert({
+          title: "Campo obrigatório",
+          message: "O motivo é obrigatório quando a entrega não é realizada.",
+          type: "warning",
+        });
         return;
       }
       if (!photoDataUrl) {
-        Alert.alert("Foto obrigatória", "Anexe a foto de comprovação.");
+        showAlert({
+          title: "Foto obrigatória",
+          message: "Anexe a foto de comprovação.",
+          type: "warning",
+        });
         return;
       }
       onConfirm({
