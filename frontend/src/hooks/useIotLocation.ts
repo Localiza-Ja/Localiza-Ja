@@ -11,9 +11,19 @@
 
 import { useEffect, useState, useRef } from "react";
 import * as Location from "expo-location";
-import { api } from "../services/api"; // usa sua api.ts (export const api = ...)
+import { api } from "../services/api";
 
 type LocationObject = Location.LocationObject;
+
+type LocalizacaoApi = {
+  latitude: number;
+  longitude: number;
+  data_hora?: string;
+};
+
+type LocalizacoesResponse = {
+  Localizacoes?: LocalizacaoApi[];
+};
 
 // --- Helpers para distância e heading (somente front, sem banco/back) ---
 const EARTH_RADIUS_M = 6371000; // raio médio da Terra em metros
@@ -73,7 +83,7 @@ function calculateBearing(
  * @param iotActive se true, ativa a leitura do IoT; se false, desliga e zera estado
  */
 export function useIotLocation(
-  motoristaId: number | string | null | undefined,
+  motoristaId: string | number | null | undefined,
   iotActive: boolean
 ) {
   const [iotLocation, setIotLocation] = useState<LocationObject | null>(null);
@@ -101,11 +111,13 @@ export function useIotLocation(
 
     const fetchLocation = async () => {
       try {
-        // ajuste a rota se no seu back for diferente
-        const response = await api.get(
+        console.log("[IOT] Buscando localização do motorista", motoristaId);
+
+        const res = await api.get<LocalizacoesResponse>(
           `/localizacoes/motorista/${motoristaId}`
         );
-        const locs = response.data;
+
+        const locs = res.data?.Localizacoes;
 
         if (!locs || !Array.isArray(locs) || locs.length === 0) {
           if (!cancelled) {
@@ -132,7 +144,9 @@ export function useIotLocation(
           return;
         }
 
-        const timestampMs = new Date(last.data_hora).getTime();
+        const timestampMs = last.data_hora
+          ? new Date(last.data_hora).getTime()
+          : Date.now();
 
         // valores padrão para o primeiro ponto
         let heading = 0;

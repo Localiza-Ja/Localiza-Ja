@@ -256,7 +256,7 @@ export default function MapScreen() {
     updateDriverLocation();
 
     // Atualiza a cada 2 minutos
-    const interval = setInterval(updateDriverLocation, 2 * 60 * 1000);
+    const interval = setInterval(updateDriverLocation, 10 * 1000);
 
     return () => clearInterval(interval);
   }, [motoristaId, selectedDelivery?.status]);

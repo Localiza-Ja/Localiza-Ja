@@ -105,7 +105,7 @@ export function useMapScreen() {
   }, [iotActive, iotHasData, iotLocation, driverLocation]);
 
   // 🔹 NOVO: toast 1x quando IoT está ativo e sem dados
-  const iotWarningShownRef = useRef(false);
+  const iotWarningShownRef = useRef(true);
   useEffect(() => {
     if (!iotActive) {
       iotWarningShownRef.current = false;
