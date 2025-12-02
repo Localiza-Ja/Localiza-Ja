@@ -1,91 +1,331 @@
-📚 Documentação do Projeto: Cliente GPS (ESP32)
-Este módulo é o cliente de hardware responsável por coletar dados simulados de GPS, serializá-los no formato JSON aninhado e enviá-los via HTTP POST para a API Flask.
+# 📡 Localiza-Já – Firmware IoT (ESP32 + GPS)
 
-🎯 Objetivo do Código
-O código principal do ESP32 tem três funções principais e sequenciais:
+Este diretório contém o código do **dispositivo IoT** usado no projeto **Localiza-Já**.  
+O firmware roda em um **ESP32** conectado a um módulo **GPS**, e é responsável por enviar, periodicamente, a localização do veículo para o backend Flask do sistema.
 
-Gerenciar a conexão Wi-Fi de forma resiliente (WiFiMulti).
+---
 
-Construir um payload JSON complexo (GPS aninhado dentro de uma string) para satisfazer a validação da API Flask.
+## 🎯 Objetivo do dispositivo IoT
 
-Estabelecer uma conexão HTTP POST para enviar os dados.
+O firmware do ESP32 foi desenvolvido para:
 
-⚙️ Bibliotecas Essenciais
-Biblioteca	Propósito
-WiFi.h & WiFiMulti.h	Gerenciamento da conexão Wi-Fi do ESP32. O WiFiMulti permite configurar múltiplas redes para maior robustez.
-HTTPClient.h	Criação e gerenciamento das requisições HTTP (GET/POST/PUT) para a API.
-ArduinoJson.h	Ferramenta fundamental para construir, serializar e manipular estruturas de dados JSON de forma eficiente no ESP32.
+1. Ler as coordenadas de **latitude** e **longitude** vindas do módulo GPS (sentenças NMEA).
+2. Monitorar se o GPS já possui **fix** (posição válida) e quantidade de satélites.
+3. Sincronizar o horário via **NTP** para ter um `data_hora` consistente.
+4. Conectar o ESP32 a uma rede **WiFi** configurada no código.
+5. Montar um JSON com os dados de localização e identificação do motorista/entrega.
+6. Enviar esse JSON periodicamente para o backend, no endpoint:
+   - `POST /localizacoes/iot`
+7. Exibir no **Serial Monitor** logs detalhados de:
+   - status do GPS,
+   - status da conexão WiFi,
+   - requisições HTTP,
+   - respostas do servidor.
 
-Exportar para as Planilhas
-🛠 Configuração Inicial (void setup())
-O bloco void setup() é responsável por inicializar a comunicação serial e configurar a rede.
+---
 
-Inicialização Serial: USE_SERIAL.begin(115200); define a taxa de comunicação para monitoramento.
+## 📁 Estrutura da pasta
 
-Conexão Wi-Fi: O bloco wifiMulti.addAP(ssid, password); armazena as credenciais de rede, que serão usadas no void loop().
+```text
+iot/
+└── arduino2.ino   # Sketch completo do ESP32 + GPS para o projeto Localiza-Já
+```
 
-Pinos: Os pinos do LED (ledPin) e do botão (pinoBotao) são inicializados, embora a lógica do botão tenha sido ignorada para focar no teste de GPS.
+---
 
-🚀 Lógica de Execução (void loop())
-O void loop() contém a lógica de rede e envio de dados. Ele executa a cada 10 segundos (delay(10000);).
+# 🧩 Tecnologias e Bibliotecas Utilizadas
 
-1. Verificação de Conexão
-C++
+### 📶 **WiFi.h**
+Conexão do ESP32 à rede WiFi em modo station.
 
-if ((wifiMulti.run() == WL_CONNECTED)) {
-    // ... lógica de envio
-} else {
-    Serial.println("Conexão com o WIFI perdida");
+### 🌐 **HTTPClient.h**
+Cliente HTTP usado para enviar as requisições POST.
+
+### 📦 **ArduinoJson.h**
+Montagem do JSON contendo latitude/longitude/IDs.
+
+### 🛰️ **TinyGPSPlus.h**
+Responsável por interpretar as sentenças NMEA e gerar:
+- latitude  
+- longitude  
+- idade das coordenadas (age)  
+- número de satélites  
+
+### 🔌 **HardwareSerial.h**
+Cria uma serial separada para o GPS, independente da USB.
+
+---
+
+# ⚙️ Configurações Importantes no Código
+
+No topo do **arduino2.ino**, ajuste:
+
+---
+
+### 🔐 **Configuração de WiFi**
+
+```cpp
+const char* ssid     = "NOME_DA_REDE";
+const char* password = "SENHA_DA_REDE";
+```
+
+
+### 🧍 Identificação (IDs precisam ser os mesmos do backend)
+```cpp
+const char* motoristaId = "ID_DO_MOTORISTA";
+const char* entregaId   = "ID_DA_ENTREGA";
+```
+
+### 🌐 Backend API
+
+No código, existe uma URL/endpoint para onde a requisição HTTP é enviada, algo como:
+
+```cpp
+const char* apiUrl = "http://SEU_IP_BACKEND:5000/localizacoes/iot";
+```
+
+- Substitua SEU_IP_BACKEND pelo IP onde o backend Flask está rodando.
+- Certifique-se que o ESP32 está na mesma rede que esse IP.
+
+---
+
+# 🧠 Funcionamento do firmware
+
+## Setup
+
+ ### 🐞 Inicializa a serial de debug
+
+```cpp
+ Serial.begin(115200);
+```
+
+ ### 🛰️ Inicializa a serial do GPS
+
+ ```cpp
+ SerialGPS.begin(baudrateGPS, SERIAL_8N1, RX_PIN, TX_PIN);
+ ```
+
+ ### 📡 Conecta no WiFi
+
+ ```cpp
+ WiFi.mode(WIFI_STA);
+ WiFi.begin(ssid, password);
+ ```
+
+ ### Logs do Serial:
+
+ ```cpp
+ Conectando ao WiFi...
+ Conectado! IP: 192.168.x.x
+ ```
+
+ ### ⏰ Sincroniza horário via NTP
+
+ ```cpp
+ configTime(-3 * 3600, 0, "pool.ntp.org");
+ ```
+ - Usado para preencher o campo data_hora.
+
+## Loop
+
+O loop executa três tarefas principais:
+
+### - 1 Ler continuamente o GPS
+
+```cpp
+while (SerialGPS.available() > 0) {
+  gps.encode(SerialGPS.read());
 }
-O código só prossegue com a requisição HTTP se houver uma conexão Wi-Fi ativa.
+```
 
-2. Configuração HTTP
-C++
+Atualiza:
+- Localização
+- Satélites
+- Age da posição
 
-HTTPClient client;
-const char* api_url = "http://192.168.168.100:5000/sensor_api";
-client.begin(api_url); 
-client.addHeader("Content-Type","application/json");
-client.setTimeout(10000); // Timeout de 10s para estabilidade
-Define a URL completa com o endpoint /sensor_api.
+### - 2 Exibir status (a cada X ms)
 
-Configura o cabeçalho Content-Type como application/json.
+Exemplo:
+```cpp
+Lat: -22.90912 | Lon: -47.075901 | Satélites: 5 | age=1200ms
+```
+Sem fix:
+```cpp
+GPS sem fix ainda...
+Nenhuma posição disponível...
+```
 
-Define um Timeout de 10 segundos para prevenir o erro HTTP Code: -1 em casos de lentidão na rede.
+### - 3 Envio periódico ao backend
 
-3. Construção do Payload JSON (Aninhamento Crítico)
-Esta é a parte mais importante, garantindo que o JSON atenda à validação do backend (reqparse).
+```cpp
+static unsigned long lastSend = 0;
+const unsigned long sendInterval = 2000;
 
-O formato final esperado pelo Flask é: {"tipo":"gps", "dados":"{\"latitude\":..., \"longitude\":...}"}.
-
-Passo	Código	Propósito
-A. Objeto GPS	StaticJsonDocument<100> gpsDoc;	Cria um buffer para o JSON interno de GPS.
-gpsDoc["latitude"] = -23.5505;	Popula as coordenadas.
-B. Serialização	char gpsString[100]; serializeJson(gpsDoc, gpsString);	Transforma o objeto GPS em uma STRING pura, que é o formato exigido pelo campo dados do Flask.
-C. Objeto Principal	StaticJsonDocument<CAPACITY> doc; JsonObject object = doc.to<JsonObject>();	Cria o buffer principal.
-D. Montagem Final	object["tipo"] = "gps"; object["dados"] = gpsString;	Insere a string JSON de GPS no campo dados do JSON principal.
-E. Buffer de Envio	serializeJson(doc, jsonOutput);	Salva o JSON completo (já formatado para o backend) no buffer que será enviado.
-
-Exportar para as Planilhas
-4. Envio e Tratamento de Resposta
-C++
-
-int httpCode = client.POST(String(jsonOutput));
-
-if (httpCode > 0){
-    // ... Statuscode 201 (Sucesso)
-} else {
-    // ... Tratamento de erros (incluindo o famoso 'connection refused' -1)
-    Serial.println("Client Error: " + client.errorToString(httpCode)); 
+if (millis() - lastSend > sendInterval) {
+  sendLocation();
+  lastSend = millis();
 }
+```
 
-client.end(); // Libera os recursos HTTP
-A função client.POST() envia o jsonOutput.
+## sendLocation() – O núcleo do firmware
 
-O código verifica se o httpCode é positivo (sucesso) ou negativo (erro de conexão).
+### 🔍 Validação da posição
 
-Em caso de sucesso (201), ele imprime a resposta JSON do Flask (confirmando que o dado foi salvo).
+Valida:
+- se localização é válida
+- número de satélites
+- idade (ms)
 
-Crucial: client.end(); é chamado para fechar a conexão e liberar a memória do ESP32, garantindo que o próximo ciclo possa ocorrer sem falhas de recursos.
+Se inválido → não envia.
 
-O delay(10000); no final pausa o ciclo por 10 segundos.
+---
+
+# 🧱 Montagem do JSON
+
+```cpp
+{
+  "entrega_id": "f0e9d8c7-b6a5-4321-fedc-ba9876543210",
+  "motorista_id": "be5b1814-31f5-443b-8496-f7a3aafb145b",
+  "latitude": -22.9092,
+  "longitude": -47.07591,
+  "data_hora": "2025-11-25 23:13:56"
+}
+```
+
+---
+
+# 🌐 Envio HTTP
+No serial:
+```cpp
+Enviando: { ...JSON... }
+HTTP 201
+Corpo: {"status": true, "message": "Localização recebida com sucesso."}
+```
+
+---
+
+# ⚠️ Tratamento de erros
+
+Exemplos:
+```cpp
+[HTTP] Falha ao conectar
+WiFi desconectado
+Erro de DNS
+```
+
+---
+
+# 🔁 Integração com Backend Flask
+
+O endpoint:
+```cpp
+POST /localizacoes/iot
+```
+
+Retorna:
+```cpp
+{
+  "Localizacao": {
+    "id": "e09d2afe-b5df-4def-a888-88bf0aa1f63f",
+    "entrega_id": "457799d2-84b0-410a-8f98-fcd9d61fc5ce",
+    "motorista_id": "be5b1814-31f5-443b-8496-f7a3aafb145b",
+    "latitude": -22.9092,
+    "longitude": -47.07591,
+    "data_hora": "2025-11-25 20:13:56.245028",
+    "criado_em": "2025-11-25 20:13:56.245028",
+    "atualizado_em": "2025-11-25 20:13:56.245028"
+  },
+  "message": "Localização recebida com sucesso.",
+  "status": true
+}
+```
+
+O frontend lê isso via useIotLocation.
+
+---
+
+# 🖥️ Como rodar o firmware IoT (Arduino IDE)
+
+## 1️⃣ **Preparar ambiente**
+
+- Instalar Arduino IDE 2.x
+- Instalar ESP32 Boards
+- Conectar ESP32
+- Abrir arduino2.ino
+
+## 2️⃣ **Selecionar Board e Porta**
+
+```cpp
+Board: ESP32 Dev Module
+Port: COMx (Windows)
+Port: /dev/ttyUSBx (Linux/macOS)
+```
+
+## 3️⃣ **Compilar e enviar**
+
+- Compilar: ✓
+- Enviar: →
+
+Saída típica:
+
+```cpp
+Writing at 0x00001000...
+Wrote 1047472 bytes...
+Hard resetting via RTS pin...
+```
+
+## 4️⃣ **Abrir Serial Monitor (115200)**
+
+Exemplo:
+
+```cpp
+Conectando ao WiFi...
+Conectado!
+
+GPS sem fix ainda...
+Lat: -22.90912 | Lon: -47.075901 | Satélites: 5
+
+Enviando...
+HTTP 201
+Localização recebida com sucesso.
+```
+
+---
+
+# 🧪 Dicas de Teste e Diagnóstico
+
+## 📡 GPS sem fix?
+- Ir próximo a janela/área aberta
+- Conferir antena
+- Primeiro fix pode levar minutos
+
+## 📶 Problemas de WiFi?
+
+- Conferir ssid/password
+- Rede precisa ser 2.4 GHz
+
+## ❌ Sem resposta HTTP?
+
+- Confirmar backend Flask rodando
+- Testar endpoint no navegador/Postman
+
+---
+
+# ✅ Resumo Final
+
+O firmware transforma o **ESP32 + GPS** em um **rastreador IoT** integrado ao Localiza-Já.
+
+Ele:
+
+- ✔️ lê e valida coordenadas
+- ✔️ sincroniza horário
+- ✔️ conecta ao WiFi
+- ✔️ envia JSONs periódicos
+- ✔️ exibe logs completos
+- ✔️ alimenta o app mobile com dados reais
+
+O app pode alternar entre:
+
+- 📱 GPS do celular
+- 📡 IoT (ESP32)
+- ⚙️ Simulação

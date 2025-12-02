@@ -64,8 +64,8 @@ export function useMapScreen() {
   const [sheetIndex, setSheetIndex] = useState(1); // índice do BottomSheet (10%, 60%, 95%)
   const [sheetTargetIndex, setSheetTargetIndex] = useState<number | null>(null);
 
-  // 🔹 NOVO: controle para ligar/desligar IoT (depois vamos ligar isso no SimulationFab)
-  const [iotActive, setIotActive] = useState(false);
+  // 🔹 controle para ligar/desligar IoT (depois vamos ligar isso no SimulationFab)
+  const [iotActive, setIotActive] = useState(true);
 
   // --- BLOCO: estado de alto nível da SIMULAÇÃO (independente do mapa) ---
   const simulation = useSimulationController();
