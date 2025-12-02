@@ -20,13 +20,13 @@ O objetivo é demonstrar, de forma profissional e didática, como integrar:
 
 > Protótipo no Figma
 
-![Protótipo no Figma](../frontend/assets/images/figmalocalizaja.png)
+![Protótipo no Figma](frontend/assets/images/figmalocalizaja.png)
 
 > Resultado Final
-![Aplicativo rodando no celular](../frontend/assets/images/localiz001.jpeg)
-![Aplicativo rodando no celular](../frontend/assets/images/localiz002.jpeg)
-![Aplicativo rodando no celular](../frontend/assets/images/localiz003.jpeg)
-![Aplicativo rodando no celular](../frontend/assets/images/localiz004.jpeg)
+![Aplicativo rodando no celular](frontend/assets/images/localiz001.jpeg)
+![Aplicativo rodando no celular](frontend/assets/images/localiz002.jpeg)
+![Aplicativo rodando no celular](frontend/assets/images/localiz003.jpeg)
+![Aplicativo rodando no celular](frontend/assets/images/localiz004.jpeg)
 
 
 ---
